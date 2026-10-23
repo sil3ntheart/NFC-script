@@ -1,7 +1,3 @@
--- ============================================================
--- Rayfield Gen2 — Megs gui (merged with ESP)
--- v1.0.1 — Hitbox collision fix + Mora Miserium
--- ============================================================
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/gen2"))()
 
 local Players = game:GetService("Players")
@@ -31,29 +27,37 @@ local fpsBoostEnabled = false
 local originalParticleStates = {}
 local keepAliveRunning = true
 
--- ============================================================
--- HITBOX COLLISION GROUP
--- ============================================================
-pcall(function()
-    PhysicsService:RegisterCollisionGroup("MegsHitbox")
-end)
-pcall(function()
-    PhysicsService:CollisionGroupSetCollidable("MegsHitbox", "MegsHitbox", false)
-end)
-pcall(function()
-    PhysicsService:CollisionGroupSetCollidable("MegsHitbox", "Default", false)
-end)
+local function hasFiresignal()
+    return type(firesignal) == "function"
+end
 
--- ============================================================
--- COMBAT STATE
--- ============================================================
+do
+    pcall(function() PhysicsService:RegisterCollisionGroup("MegsHitboxGroup") end)
+    pcall(function() PhysicsService:CollisionGroupSetCollidable("MegsHitboxGroup", "MegsHitboxGroup", false) end)
+    pcall(function() PhysicsService:CollisionGroupSetCollidable("MegsHitboxGroup", "Default", false) end)
+end
+
 local hitboxEnabled = false
 local hitboxSize = Vector3.new(10, 10, 10)
-local hitboxTransparency = 1
+local hitboxTransparency = 0.7
+local hitboxShow = false
 
 local vampireCDEnabled = false
 local wolfCDEnabled    = false
 local witchCDEnabled   = false
+
+local unstableCDEnabled = false
+local serumCDEnabled    = false
+local soulbindCDEnabled = false
+local geminiCDEnabled   = false
+
+local expressionCDEnabled      = false
+local ancientCDEnabled         = false
+local darkCDEnabled            = false
+local astralCDEnabled          = false
+local awakenedSoulbindCDEnabled = false
+local originalMagicCDEnabled   = false
+local connectiveCDEnabled      = false
 
 local vampireCDList = {
     "NeckSnap", "WristSnap", "BloodHeal", "Feed", "SpineBreak",
@@ -63,34 +67,64 @@ local vampireCDList = {
 local wolfCDList = { "ClawedBoxing", "GutKick", "MenacingGlare", "NeckSnap" }
 local witchCDList = { "Ictus", "Aquamalia", "Immobilus", "Invisique", "Ossox", "PoenaDoloris" }
 
-local originalHitboxSizes = {}
+local unstableCDList = {
+    "Dissulta", "QuarantineSpell", "Stellabunde", "TelekineticScream",
+}
+local serumCDList = {
+    "OverheadCrush", "SerumBite", "StakeThrow", "KnuckleDown",
+}
+local soulbindCDList = {
+    "TelekineticWristSnap", "SanguisSicco", "SanguisDucatur", "OmnisDormit",
+    "HarvestOverflow", "NemoUnusAnimabusCarnem",
+}
+local geminiCDList = {
+    "ISaidHey", "Ignalusa", "Ignarious", "PervenioSupervenioAdvehor", "ResistusMaledi",
+}
+
+local expressionCDList = {
+    "Vados", "Restraint", "PhasmatosAerisCirculo", "DoloremInferunt", "Sanitatum",
+}
+local ancientCDList = {
+    "VineManipulation", "SequunturSomnia", "MemoryOverload", "AhShaLana",
+}
+local darkCDList = {
+    "InvidiumCalamactus", "DarkBlast", "DarkBeam", "Autem", "Ascendo",
+    "AdvancedJapanesePurgingSpell", "SiphonHug", "MagicRevolve", "DarkMagicLocator",
+}
+local astralCDList = {
+    "CrowTransformation", "BrainMelt", "CardiacArrest", "PhaseCollapse", "SygilSpell",
+    "VampirismWeakening", "AncestralEradication", "ToxinsRemedy",
+}
+local awakenedSoulbindCDList = {
+    "SonicScream", "Soulbinding", "TelekineticCombo", "HarvestChaos", "LightningStrikeSpell",
+    "MassTelekineticSnap", "MemoryWipingSpell", "NemoUnusAnimabusCarnem",
+}
+local originalMagicCDList = {
+    "AdvancedPainInfliction", "CrowStorm", "LinkShatter", "ProtectiveSaltCircle",
+    "RestrainingChains", "VictasConfracta", "VampirismReversal", "BloodlineChannel",
+}
+local connectiveCDList = {
+    "SoulLink", "ToolDestruction", "AdvancedAneurysm", "Wraithstep", "Victas",
+    "SanguinemConfractus", "FatedPursuit", "EnchantedBind", "ConnectiveField",
+}
+
 local hitboxHookedChars = {}
 local hitboxCharConns = {}
 
--- ============================================================
--- MOVEMENT STATE
--- ============================================================
 local noclipEnabled = false
 local originalCollisions = {}
+local noclipCharConn = nil
 
--- ============================================================
--- MORA MISERIUM (AUTO-STRUGGLE) STATE
--- ============================================================
 local autoStruggleEnabled = false
 local lastProcessedText = ""
+local nonAsciiWarned = false
 
--- ============================================================
--- STAFF MONITOR STATE
--- ============================================================
 local STAFF_GROUP_ID = 35585413
 local STAFF_RANK_THRESHOLD = 3
 local staffNotifyEnabled = false
 local staffOnJoinConnection = nil
 local currentStaff = {}
 
--- ============================================================
--- CAPTURE ORIGINAL LIGHTING + ATMOSPHERE
--- ============================================================
 local originalLighting = {
     ClockTime            = Lighting.ClockTime,
     Brightness           = Lighting.Brightness,
@@ -119,9 +153,6 @@ do
     end
 end
 
--- ============================================================
--- WEATHER DISCOVERY
--- ============================================================
 local WorldValues   = workspace:FindFirstChild("WorldValues")
 local WorldStatuses = workspace:FindFirstChild("WorldStatuses")
 local rainFlag      = WorldValues   and WorldValues:FindFirstChild("rain")
@@ -132,9 +163,6 @@ local originalWeather = {
     redStorm = (redStormFlag and redStormFlag.Value) or false,
 }
 
--- ============================================================
--- WEATHER/PRESET TABLE
--- ============================================================
 local weatherPresets = {
     day = {
         rain = false, redStorm = false,
@@ -201,9 +229,6 @@ local weatherPresets = {
     },
 }
 
--- ============================================================
--- APPLY HELPERS
--- ============================================================
 local currentPresetName = nil
 
 local function applyLightingTable(tbl)
@@ -241,7 +266,7 @@ local function setRainSoundState(wantPlaying)
             snd.Looped = true
             if not snd.IsPlaying then snd:Play() end
         else
-            snd:Stop()
+            if snd.IsPlaying then snd:Stop() end
         end
     end)
     return true
@@ -273,9 +298,15 @@ end
 
 task.spawn(function()
     while keepAliveRunning do
-        task.wait(0.75)
-        if keepAliveRunning and currentPresetName then
-            applyPreset(currentPresetName)
+        task.wait(3)
+        if currentPresetName then
+            local preset = weatherPresets[currentPresetName]
+            if preset then
+                local drift = false
+                if rainFlag and rainFlag.Value ~= preset.rain then drift = true end
+                if redStormFlag and redStormFlag.Value ~= preset.redStorm then drift = true end
+                if drift then applyPreset(currentPresetName) end
+            end
         end
     end
 end)
@@ -288,18 +319,25 @@ LocalPlayer.CharacterAdded:Connect(function()
     end
 end)
 
--- ============================================================
--- Connections tracker
--- ============================================================
 local connections = {}
 local function track(conn)
     if conn then connections[#connections + 1] = conn end
     return conn
 end
+local function untrack(conn)
+    if not conn then return end
+    for i = #connections, 1, -1 do
+        if connections[i] == conn then
+            table.remove(connections, i)
+        end
+    end
+end
+local function disconnectTracked(conn)
+    if not conn then return end
+    pcall(function() conn:Disconnect() end)
+    untrack(conn)
+end
 
--- ============================================================
--- Anticheat bypass
--- ============================================================
 local remote = ReplicatedStorage:FindFirstChild("AntiCheatRemote")
 
 if remote
@@ -339,7 +377,7 @@ if remote
             pcall(hookfunction, flag, function() end)
         else
             task.spawn(function()
-                while true do
+                while keepAliveRunning do
                     for index = 1, WANTED_UPVALUES do
                         local ok, value = pcall(debug.getupvalue, flag, index)
                         if ok then
@@ -357,22 +395,14 @@ if remote
     end
 end
 
-print("Thanks for using my gui auto bypass is auto enabled when you execute have fun! <3")
-
--- ============================================================
--- Window
--- ============================================================
 local window = Rayfield:CreateWindow({
     name = "Megs gui",
-    subtitle = "v1.0.1",
+    subtitle = "v1.1.7",
     sidebarLayout = true,
     theme = "cobalt",
     configuration = { autoSave = true, autoLoad = true, fileName = "MegsGuiConfig" },
 })
 
--- ============================================================
--- LOAD SUPPRESSION
--- ============================================================
 local isInitialLoad = true
 task.delay(2, function() isInitialLoad = false end)
 
@@ -382,9 +412,6 @@ local function NotifySafe(tbl)
     end
 end
 
--- ============================================================
--- ESP flags + sync
--- ============================================================
 local espFlags = {
     enabled = false, name = true, species = true, bloodline = true,
     health = true, distance = true, spellESP = true, visESP = true,
@@ -424,22 +451,40 @@ local function syncFlagsFromRayfield()
     if F.ColorDistance  then COLORS.dist      = F.ColorDistance end
     if F.ColorSpell     then COLORS.spell     = F.ColorSpell end
 
-    if F.WeatherPreset ~= nil and weatherPresets[F.WeatherPreset] then
-        currentPresetName = F.WeatherPreset
-        applyPreset(F.WeatherPreset)
-    end
-
     if F.WeatherGlobalShadows ~= nil then
         pcall(function() Lighting.GlobalShadows = F.WeatherGlobalShadows end)
     end
 
-    if F.HitboxTransparency ~= nil then
-        hitboxTransparency = F.HitboxTransparency and 0.7 or 1
+    if F.HitboxShow ~= nil then
+        hitboxShow = F.HitboxShow
+        hitboxTransparency = hitboxShow and 0.7 or 1
+    end
+
+    if F.HitboxSize ~= nil then
+        local v = tonumber(F.HitboxSize)
+        if v then hitboxSize = Vector3.new(v, v, v) end
+    end
+
+    if F.HitboxEnabled ~= nil then
+        hitboxEnabled = F.HitboxEnabled
     end
 
     if F.VampireCD ~= nil then vampireCDEnabled = F.VampireCD end
     if F.WolfCD    ~= nil then wolfCDEnabled    = F.WolfCD    end
     if F.WitchCD   ~= nil then witchCDEnabled   = F.WitchCD   end
+
+    if F.UnstableCD ~= nil then unstableCDEnabled = F.UnstableCD end
+    if F.SerumCD    ~= nil then serumCDEnabled    = F.SerumCD    end
+    if F.SoulbindCD ~= nil then soulbindCDEnabled = F.SoulbindCD end
+    if F.GeminiCD   ~= nil then geminiCDEnabled   = F.GeminiCD   end
+
+    if F.ExpressionCD       ~= nil then expressionCDEnabled       = F.ExpressionCD end
+    if F.AncientCD          ~= nil then ancientCDEnabled          = F.AncientCD end
+    if F.DarkCD             ~= nil then darkCDEnabled             = F.DarkCD end
+    if F.AstralCD           ~= nil then astralCDEnabled           = F.AstralCD end
+    if F.AwakenedSoulbindCD ~= nil then awakenedSoulbindCDEnabled = F.AwakenedSoulbindCD end
+    if F.OriginalMagicCD    ~= nil then originalMagicCDEnabled    = F.OriginalMagicCD end
+    if F.ConnectiveCD       ~= nil then connectiveCDEnabled       = F.ConnectiveCD end
 
     if F.StaffNotify ~= nil then staffNotifyEnabled = F.StaffNotify end
     if F.NoclipEnabled ~= nil then noclipEnabled = F.NoclipEnabled end
@@ -451,9 +496,6 @@ local function syncFlagsFromRayfield()
     end
 end
 
--- ============================================================
--- Teleport locations
--- ============================================================
 local MapLocations = {
     ["Cure Tomb"]       = Vector3.new(485.13,  -67.09,  59.68),
     ["Witch House"]     = Vector3.new(-1138.57, 37.16, 642.42),
@@ -474,7 +516,7 @@ local function safeTeleport(targetPos, label)
         NotifySafe({ title = "Teleport", content = "Character not found.", duration = 3 })
         return
     end
-    local offsets = { 0, 3, 6, -3, 10, 20, -10, 50 }
+    local offsets = { 0, -3, 3, 6, 10, 20, -10, 50 }
     local finalPos = targetPos
     local found = false
     for _, dy in ipairs(offsets) do
@@ -497,9 +539,6 @@ local function safeTeleport(targetPos, label)
     end
 end
 
--- ============================================================
--- STAFF MONITOR
--- ============================================================
 local function getStaffInfo(player)
     local ok, rank = pcall(function() return player:GetRankInGroup(STAFF_GROUP_ID) end)
     if not ok then return nil end
@@ -533,7 +572,7 @@ end
 
 local function setupStaffJoinWatcher()
     if staffOnJoinConnection then
-        pcall(function() staffOnJoinConnection:Disconnect() end)
+        disconnectTracked(staffOnJoinConnection)
         staffOnJoinConnection = nil
     end
     staffOnJoinConnection = Players.PlayerAdded:Connect(function(player)
@@ -562,7 +601,7 @@ local function onStaffToggleChanged(v)
         })
     else
         if staffOnJoinConnection then
-            pcall(function() staffOnJoinConnection:Disconnect() end)
+            disconnectTracked(staffOnJoinConnection)
             staffOnJoinConnection = nil
         end
     end
@@ -579,9 +618,6 @@ if staffNotifyEnabled then
     end)
 end
 
--- ============================================================
--- NOCLIP LOGIC
--- ============================================================
 local function saveCollisions(char)
     originalCollisions = {}
     for _, part in ipairs(char:GetDescendants()) do
@@ -600,9 +636,18 @@ local function restoreCollisions(char)
     originalCollisions = {}
 end
 
+if not noclipCharConn then
+    noclipCharConn = LocalPlayer.CharacterAdded:Connect(function(char)
+        if noclipEnabled and char then
+            task.wait(0.3)
+            saveCollisions(char)
+        end
+    end)
+end
+
 task.spawn(function()
-    while true do
-        task.wait(0.1)
+    while keepAliveRunning do
+        task.wait(0.2)
         if noclipEnabled then
             local char = LocalPlayer.Character
             if char then
@@ -619,9 +664,6 @@ task.spawn(function()
     end
 end)
 
--- ============================================================
--- MORA MISERIUM (AUTO-STRUGGLE) LOGIC
--- ============================================================
 local function getStruggleTextLabel()
     local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
     if not playerGui then return nil end
@@ -645,22 +687,35 @@ end
 
 task.spawn(function()
     while keepAliveRunning do
-        task.wait()
+        task.wait(0.03)
         if autoStruggleEnabled then
             local textLabel = getStruggleTextLabel()
-            if textLabel and textLabel.Visible then
+            if not textLabel or not textLabel.Visible then
+                lastProcessedText = ""
+            elseif textLabel and textLabel.Visible then
                 local currentText = textLabel.Text
-                if #currentText == 1 and currentText ~= lastProcessedText then
-                    local keyCode = getKeyCode(currentText)
-                    if keyCode then
-                        lastProcessedText = currentText
-                        pcall(function()
-                            VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
-                        end)
-                        task.wait(0.02)
-                        pcall(function()
-                            VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
-                        end)
+                if #currentText == 1 then
+                    if currentText ~= lastProcessedText then
+                        local keyCode = getKeyCode(currentText)
+                        if keyCode then
+                            lastProcessedText = currentText
+                            pcall(function()
+                                VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
+                            end)
+                            task.wait(0.02)
+                            pcall(function()
+                                VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
+                            end)
+                        else
+                            if not nonAsciiWarned then
+                                nonAsciiWarned = true
+                                NotifySafe({
+                                    title = "Mora Miserium",
+                                    content = "Encountered a non A-Z key. Auto-struggle may miss some letters.",
+                                    duration = 6,
+                                })
+                            end
+                        end
                     end
                 elseif #currentText == 0 then
                     lastProcessedText = ""
@@ -670,9 +725,6 @@ task.spawn(function()
     end
 end)
 
--- ============================================================
--- ESP helpers
--- ============================================================
 local function healthColor(hp, maxHp)
     if not maxHp or maxHp <= 0 then
         return Color3.fromRGB(0xFF, 0xFF, 0xFF)
@@ -701,7 +753,7 @@ local espState = {}
 local totemObjects = {}
 
 local ESP_DATA_INTERVAL = 0.20
-local ESP_RENDER_INTERVAL = 1 / 90
+local ESP_RENDER_INTERVAL = 1 / 60
 local lastESPRender = 0
 
 local drawingAvailable =
@@ -817,6 +869,15 @@ local function trackPlayer(player)
     trackedPlayers[player] = true
 end
 
+local function restoreHitbox(player)
+    if not player or not player.Character then return end
+    local rootPart = player.Character:FindFirstChild("HumanoidRootPart")
+    if rootPart then
+        local box = rootPart:FindFirstChild("CustomHitbox")
+        if box then box:Destroy() end
+    end
+end
+
 local function removeESP(player)
     removeObjects(player)
     trackedPlayers[player] = nil
@@ -828,6 +889,7 @@ local function removeESP(player)
         pcall(function() conn:Disconnect() end)
         hitboxCharConns[player.UserId] = nil
     end
+    restoreHitbox(player)
 end
 
 pcall(function()
@@ -925,6 +987,9 @@ local function resolveParts(st, player)
         st.char = char
         st.hrp = nil; st.humanoid = nil; st.gui = nil
         st.px = {}; st.py = {}; st.nextUpdate = nil
+        st.species = nil; st.bloodline = nil; st.spellText = nil
+        st.visible = true
+        st.hp = nil; st.maxHp = nil; st.hpColor = nil; st.hpPct = nil
     end
     if not st.hrp then st.hrp = char:FindFirstChild("HumanoidRootPart") end
     if not st.humanoid then st.humanoid = char:FindFirstChildOfClass("Humanoid") end
@@ -987,25 +1052,23 @@ local function renderTotems()
     local activeTotems = {}
     local camPos = Camera.CFrame.Position
     for _, totem in ipairs(totemFolder:GetChildren()) do
-        if totem.Name == "Totem(PlaceHolder)" or string.find(string.lower(totem.Name), "totem") then
-            if totem:IsA("BasePart") then
-                activeTotems[totem] = true
-                local objs = totemObjects[totem]
-                if not objs then objs = createTotemObjects(totem) end
-                objs.label.Color = COLORS.totem
-                local vp, onScreen = toScreen(totem.Position)
-                if onScreen and vp then
-                    local dist = (camPos - totem.Position).Magnitude
-                    objs.label.Text = string.format("Hollowed Totem (%d)", floor(dist))
-                    objs.label.Position = vp - Vector2.new(0, 20)
-                    objs.label.Visible = true
-                else
-                    objs.label.Visible = false
-                end
+        if totem:IsA("BasePart") then
+            activeTotems[totem] = true
+            local objs = totemObjects[totem]
+            if not objs then objs = createTotemObjects(totem) end
+            objs.label.Color = COLORS.totem
+            local vp, onScreen = toScreen(totem.Position)
+            if onScreen and vp then
+                local dist = (camPos - totem.Position).Magnitude
+                objs.label.Text = string.format("Hollowed Totem (%d)", floor(dist))
+                objs.label.Position = vp - Vector2.new(0, 20)
+                objs.label.Visible = true
+            else
+                objs.label.Visible = false
             end
         end
     end
-    for part, objs in pairs(totemObjects) do
+    for part in pairs(totemObjects) do
         if not activeTotems[part] then
             removeTotemObjects(part)
         end
@@ -1013,60 +1076,42 @@ local function renderTotems()
 end
 
 local function hideAllTotems()
-    for _, objs in pairs(totemObjects) do
-        objs.label.Visible = false
-    end
-end
-
--- ============================================================
--- COMBAT: hitbox expander
--- ============================================================
-local function restoreHitbox(player)
-    local char = player.Character
-    if not char then return end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-    local key = player.UserId
-    local original = originalHitboxSizes[key]
-    if original then
-        pcall(function()
-            hrp.Size = original.size
-            hrp.Transparency = original.transparency
-            hrp.CanCollide = original.canCollide
-            hrp.Massless = original.massless
-            hrp.CollisionGroup = original.collisionGroup
-        end)
+    local objs = totemObjects
+    for _, obj in pairs(objs) do
+        obj.label.Visible = false
     end
 end
 
 local function applyHitbox(player)
-    if player == LocalPlayer then return end
-    local char = player.Character
-    if not char then return end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not (hrp and hum and hum.Health > 0) then return end
+    if player == LocalPlayer or not player.Character then return end
+    local rootPart = player.Character:FindFirstChild("HumanoidRootPart")
+    local humanoid = player.Character:FindFirstChild("Humanoid")
+    if not (rootPart and humanoid and humanoid.Health > 0) then return end
 
-    local key = player.UserId
-    if not originalHitboxSizes[key] then
-        originalHitboxSizes[key] = {
-            size = hrp.Size,
-            transparency = hrp.Transparency,
-            canCollide = hrp.CanCollide,
-            massless = hrp.Massless,
-            collisionGroup = hrp.CollisionGroup,
-        }
+    local box = rootPart:FindFirstChild("CustomHitbox")
+    if not box then
+        box = Instance.new("Part")
+        box.Name = "CustomHitbox"
+        box.Size = hitboxSize
+        box.Transparency = (hitboxShow and hitboxTransparency or 1)
+        box.Color = Color3.fromRGB(255, 0, 0)
+        box.CanCollide = false
+        box.CanTouch = true
+        box.CanQuery = true
+        box.Massless = true
+        pcall(function() box.CollisionGroup = "MegsHitboxGroup" end)
+        
+        local weld = Instance.new("WeldConstraint")
+        weld.Part0 = rootPart
+        weld.Part1 = box
+        weld.Parent = box
+        
+        box.CFrame = rootPart.CFrame
+        box.Parent = rootPart
+    else
+        box.Size = hitboxSize
+        box.Transparency = (hitboxShow and hitboxTransparency or 1)
     end
-
-    pcall(function()
-        hrp.Size = hitboxSize
-        hrp.Transparency = hitboxTransparency
-        hrp.CanCollide = false
-        hrp.CanTouch = false
-        hrp.CanQuery = true          -- keep true so raycasts/hit detection still work
-        hrp.Massless = true
-        hrp.CollisionGroup = "MegsHitbox"
-    end)
 end
 
 local function restoreAllHitboxes()
@@ -1075,7 +1120,6 @@ local function restoreAllHitboxes()
             restoreHitbox(player)
         end
     end
-    originalHitboxSizes = {}
 end
 
 local function hookHitboxForPlayer(player)
@@ -1091,8 +1135,8 @@ local function hookHitboxForPlayer(player)
 end
 
 task.spawn(function()
-    while true do
-        task.wait(1)
+    while keepAliveRunning do
+        task.wait(0.5)
         if hitboxEnabled then
             for _, player in ipairs(Players:GetPlayers()) do
                 if player ~= LocalPlayer and player.Character then
@@ -1104,27 +1148,6 @@ task.spawn(function()
     end
 end)
 
--- ============================================================
--- SAFETY: never let our own character collide with hitboxes
--- ============================================================
-task.spawn(function()
-    while keepAliveRunning do
-        task.wait(0.25)
-        if hitboxEnabled then
-            local myChar = LocalPlayer.Character
-            if myChar then
-                -- Re-assert the collision group rule in case the game resets it
-                pcall(function()
-                    PhysicsService:CollisionGroupSetCollidable("MegsHitbox", "Default", false)
-                end)
-            end
-        end
-    end
-end)
-
--- ============================================================
--- COMBAT: per-kit CD fire loop
--- ============================================================
 local CooldownOffEvent = nil
 do
     local SpellEvent = ReplicatedStorage:FindFirstChild("SpellEvent")
@@ -1134,6 +1157,7 @@ end
 
 local function fireCDList(list)
     if not CooldownOffEvent then return end
+    if not hasFiresignal() then return end
     local myEntry = getLivingEntry(LocalPlayer)
     local casting = myEntry and myEntry:FindFirstChild("CastingSpells")
     if not casting then return end
@@ -1148,23 +1172,45 @@ local function fireCDList(list)
     end
 end
 
+task.defer(function()
+    if CooldownOffEvent and not hasFiresignal() then
+        window:Notify({
+            title = "No Cooldown",
+            content = "This executor does not provide `firesignal`. No-Cooldown toggles will not function.",
+            duration = 10,
+        })
+    end
+end)
+
 if CooldownOffEvent then
     task.spawn(function()
-        while true do
+        while keepAliveRunning do
             task.wait(0.05)
-            if not (vampireCDEnabled or wolfCDEnabled or witchCDEnabled) then
+            if not (vampireCDEnabled or wolfCDEnabled or witchCDEnabled
+                or unstableCDEnabled or serumCDEnabled or soulbindCDEnabled or geminiCDEnabled
+                or expressionCDEnabled or ancientCDEnabled or darkCDEnabled or astralCDEnabled
+                or awakenedSoulbindCDEnabled or originalMagicCDEnabled or connectiveCDEnabled) then
                 continue
             end
+            if not hasFiresignal() then continue end
             if vampireCDEnabled then fireCDList(vampireCDList) end
             if wolfCDEnabled    then fireCDList(wolfCDList)    end
             if witchCDEnabled   then fireCDList(witchCDList)   end
+            if unstableCDEnabled then fireCDList(unstableCDList) end
+            if serumCDEnabled    then fireCDList(serumCDList)    end
+            if soulbindCDEnabled then fireCDList(soulbindCDList) end
+            if geminiCDEnabled   then fireCDList(geminiCDList)   end
+            if expressionCDEnabled       then fireCDList(expressionCDList)       end
+            if ancientCDEnabled          then fireCDList(ancientCDList)          end
+            if darkCDEnabled             then fireCDList(darkCDList)             end
+            if astralCDEnabled           then fireCDList(astralCDList)           end
+            if awakenedSoulbindCDEnabled then fireCDList(awakenedSoulbindCDList) end
+            if originalMagicCDEnabled    then fireCDList(originalMagicCDList)    end
+            if connectiveCDEnabled       then fireCDList(connectiveCDList)       end
         end
     end)
 end
 
--- ============================================================
--- ESP render loop
--- ============================================================
 local function renderLoop()
     if not drawingAvailable then return end
     local now = clock()
@@ -1199,78 +1245,86 @@ local function renderLoop()
     end
 
     for _, player in ipairs(snapshot) do
-        pcall(function()
-            if player.Parent == nil then return end
+        if player.Parent ~= nil then
             local st = getState(player)
             local wasHidden = st.hidden
             local char = resolveParts(st, player)
             local hrp, humanoid = st.hrp, st.humanoid
             if not (char and hrp and humanoid and humanoid.Health > 0) then
-                hidePlayer(player, st); return
-            end
-            local worldPos = hrp.Position
-            local dist = (camPos - worldPos).Magnitude
-            if dist > maxDist then hidePlayer(player, st); return end
-            local screenPos, onScreen = toScreen(worldPos)
-            if not onScreen or not screenPos then hidePlayer(player, st); return end
-            local obj = espObjects[player]
-            if not obj then obj = createObjects(player); wasHidden = true end
-            updateESPData(player, st, char, humanoid, dist, now, wasHidden)
-            st.hidden = false
-            st.lastSeen = now
-            local boxHeight = clamp(1500 / math.max(dist, 1), 20, 250)
-            local x = screenPos.X
-            local baseY = screenPos.Y - boxHeight * 0.5 - 18
-            local off = 0
-
-            if espFlags.name then
-                showLine(st, "name", obj.name, player.Name, COLORS.name, x, baseY + off)
-                off += 16
-            else setVisible(obj.name, false) end
-
-            if espFlags.species and st.species then
-                showLine(st, "species", obj.species, st.species, COLORS.species, x, baseY + off)
-                off += 15
-            else setVisible(obj.species, false) end
-            if espFlags.spellESP and st.spellText then
-                showLine(st, "spell", obj.spell, st.spellText, COLORS.spell, x, baseY + off)
-                off += 15
-            else setVisible(obj.spell, false) end
-            if espFlags.visESP and st.visible == false then
-                showLine(st, "visible", obj.visible, "Invisible",
-                    Color3.fromRGB(0xFF, 0x50, 0x50), x, baseY + off)
-                off += 15
-            else setVisible(obj.visible, false) end
-            if espFlags.bloodline and st.bloodline then
-                showLine(st, "bloodline", obj.bloodline, st.bloodline, COLORS.bloodline, x, baseY + off)
-                off += 15
-            else setVisible(obj.bloodline, false) end
-            if espFlags.health and st.hpPct then
-                local barW = 70
-                local bx = floor(x - barW / 2 + 0.5)
-                local by = floor(baseY + off + 0.5)
-                local fillW = math.max(1, barW * st.hpPct)
-                obj.hpOutline.From = Vector2.new(bx, by)
-                obj.hpOutline.To = Vector2.new(bx + barW, by)
-                setVisible(obj.hpOutline, true)
-                obj.hpBg.From = Vector2.new(bx, by)
-                obj.hpBg.To = Vector2.new(bx + barW, by)
-                setVisible(obj.hpBg, true)
-                obj.hpFill.From = Vector2.new(bx, by)
-                obj.hpFill.To = Vector2.new(bx + fillW, by)
-                obj.hpFill.Color = st.hpColor or Color3.fromRGB(0xFF, 0xFF, 0xFF)
-                setVisible(obj.hpFill, true)
-                off += 8
+                hidePlayer(player, st)
             else
-                setVisible(obj.hpOutline, false)
-                setVisible(obj.hpBg, false)
-                setVisible(obj.hpFill, false)
+                local worldPos = hrp.Position
+                local dist = (camPos - worldPos).Magnitude
+                if dist > maxDist then
+                    hidePlayer(player, st)
+                else
+                    local screenPos, onScreen = toScreen(worldPos)
+                    if not onScreen or not screenPos then
+                        hidePlayer(player, st)
+                    else
+                        local obj = espObjects[player]
+                        if not obj then obj = createObjects(player); wasHidden = true end
+                        updateESPData(player, st, char, humanoid, dist, now, wasHidden)
+                        st.hidden = false
+                        st.lastSeen = now
+                        local boxHeight = clamp(1500 / math.max(dist, 1), 20, 250)
+                        local x = screenPos.X
+                        local baseY = screenPos.Y - boxHeight * 0.5 - 18
+                        local off = 0
+
+                        pcall(function()
+                            if espFlags.name then
+                                showLine(st, "name", obj.name, player.Name, COLORS.name, x, baseY + off)
+                                off += 16
+                            else setVisible(obj.name, false) end
+
+                            if espFlags.species and st.species then
+                                showLine(st, "species", obj.species, st.species, COLORS.species, x, baseY + off)
+                                off += 15
+                            else setVisible(obj.species, false) end
+                            if espFlags.spellESP and st.spellText then
+                                showLine(st, "spell", obj.spell, st.spellText, COLORS.spell, x, baseY + off)
+                                off += 15
+                            else setVisible(obj.spell, false) end
+                            if espFlags.visESP and st.visible == false then
+                                showLine(st, "visible", obj.visible, "Invisible",
+                                    Color3.fromRGB(0xFF, 0x50, 0x50), x, baseY + off)
+                                off += 15
+                            else setVisible(obj.visible, false) end
+                            if espFlags.bloodline and st.bloodline then
+                                showLine(st, "bloodline", obj.bloodline, st.bloodline, COLORS.bloodline, x, baseY + off)
+                                off += 15
+                            else setVisible(obj.bloodline, false) end
+                            if espFlags.health and st.hpPct then
+                                local barW = 70
+                                local bx = floor(x - barW / 2 + 0.5)
+                                local by = floor(baseY + off + 0.5)
+                                local fillW = math.max(1, barW * st.hpPct)
+                                obj.hpOutline.From = Vector2.new(bx, by)
+                                obj.hpOutline.To = Vector2.new(bx + barW, by)
+                                setVisible(obj.hpOutline, true)
+                                obj.hpBg.From = Vector2.new(bx, by)
+                                obj.hpBg.To = Vector2.new(bx + barW, by)
+                                setVisible(obj.hpBg, true)
+                                obj.hpFill.From = Vector2.new(bx, by)
+                                obj.hpFill.To = Vector2.new(bx + fillW, by)
+                                obj.hpFill.Color = st.hpColor or Color3.fromRGB(0xFF, 0xFF, 0xFF)
+                                setVisible(obj.hpFill, true)
+                                off += 8
+                            else
+                                setVisible(obj.hpOutline, false)
+                                setVisible(obj.hpBg, false)
+                                setVisible(obj.hpFill, false)
+                            end
+                            if espFlags.distance and st.distText then
+                                showLine(st, "dist", obj.dist, st.distText, COLORS.dist, x, baseY + off)
+                                off += 15
+                            else setVisible(obj.dist, false) end
+                        end)
+                    end
+                end
             end
-            if espFlags.distance and st.distText then
-                showLine(st, "dist", obj.dist, st.distText, COLORS.dist, x, baseY + off)
-                off += 15
-            else setVisible(obj.dist, false) end
-        end)
+        end
     end
 
     if espFlags.totemESP then
@@ -1293,7 +1347,7 @@ if drawingAvailable then
         connections[#connections + 1] = fakeConn
         _G.__megs_esp_conn = fakeConn
         task.spawn(function()
-            while fallbackRunning do
+            while fallbackRunning and keepAliveRunning do
                 task.wait()
                 pcall(renderLoop)
             end
@@ -1301,14 +1355,14 @@ if drawingAvailable then
     end
 end
 
--- ============================================================
--- FPS boost
--- ============================================================
 local function disableFPSBoost()
     task.spawn(function()
+        local count = 0
         for obj, state in pairs(originalParticleStates) do
             if obj and obj.Parent then
                 obj.Enabled = state
+                count += 1
+                if count % 500 == 0 then task.wait() end
             end
         end
         originalParticleStates = {}
@@ -1316,6 +1370,14 @@ local function disableFPSBoost()
     pcall(function()
         settings().Rendering.QualityLevel = originalLighting.QualityLevel or Enum.QualityLevel.Level10
     end)
+end
+
+local function cleanupParticleRefs()
+    for obj in pairs(originalParticleStates) do
+        if not obj or not obj.Parent then
+            originalParticleStates[obj] = nil
+        end
+    end
 end
 
 local function fullUnload()
@@ -1331,14 +1393,30 @@ local function fullUnload()
     vampireCDEnabled = false
     wolfCDEnabled    = false
     witchCDEnabled   = false
+    unstableCDEnabled = false
+    serumCDEnabled    = false
+    soulbindCDEnabled = false
+    geminiCDEnabled   = false
+    expressionCDEnabled      = false
+    ancientCDEnabled         = false
+    darkCDEnabled            = false
+    astralCDEnabled          = false
+    awakenedSoulbindCDEnabled = false
+    originalMagicCDEnabled   = false
+    connectiveCDEnabled      = false
 
     autoStruggleEnabled = false
     lastProcessedText = ""
 
     staffNotifyEnabled = false
     if staffOnJoinConnection then
-        pcall(function() staffOnJoinConnection:Disconnect() end)
+        disconnectTracked(staffOnJoinConnection)
         staffOnJoinConnection = nil
+    end
+
+    if noclipCharConn then
+        pcall(function() noclipCharConn:Disconnect() end)
+        noclipCharConn = nil
     end
 
     noclipEnabled = false
@@ -1366,9 +1444,6 @@ local function fullUnload()
     pcall(function() window:Unload() end)
 end
 
--- ============================================================
--- COMBAT TAB
--- ============================================================
 local combat = window:CreateTab({ name = "Combat" })
 
 combat:CreateSection({ name = "Hitbox Expander" })
@@ -1412,9 +1487,10 @@ combat:CreateSlider({
 
 combat:CreateToggle({
     name = "Show Hitbox",
-    flag = "HitboxTransparency",
+    flag = "HitboxShow",
     value = false,
     callback = function(v)
+        hitboxShow = v
         hitboxTransparency = v and 0.7 or 1
         if hitboxEnabled then
             for _, player in ipairs(Players:GetPlayers()) do
@@ -1438,38 +1514,71 @@ combat:CreateButton({
     end,
 })
 
-combat:CreateSection({ name = "Ability Cooldowns" })
+combat:CreateSection({ name = "No Cooldown Base Kit" })
 
 combat:CreateToggle({
-    name = "Vampire Kit (No CD)",
-    flag = "VampireCD",
-    value = false,
-    callback = function(v)
-        vampireCDEnabled = v
-    end,
+    name = "Vampire Kit", flag = "VampireCD", value = false,
+    callback = function(v) vampireCDEnabled = v end,
 })
+combat:CreateToggle({
+    name = "Wolf Kit", flag = "WolfCD", value = false,
+    callback = function(v) wolfCDEnabled = v end,
+})
+combat:CreateToggle({
+    name = "Witch Kit", flag = "WitchCD", value = false,
+    callback = function(v) witchCDEnabled = v end,
+})
+
+combat:CreateSection({ name = "No Cooldown Coins Characters" })
 
 combat:CreateToggle({
-    name = "Wolf CD Reduction",
-    flag = "WolfCD",
-    value = false,
-    callback = function(v)
-        wolfCDEnabled = v
-    end,
+    name = "Unstable", flag = "UnstableCD", value = false,
+    callback = function(v) unstableCDEnabled = v end,
 })
+combat:CreateToggle({
+    name = "Serum", flag = "SerumCD", value = false,
+    callback = function(v) serumCDEnabled = v end,
+})
+combat:CreateToggle({
+    name = "Soulbind", flag = "SoulbindCD", value = false,
+    callback = function(v) soulbindCDEnabled = v end,
+})
+combat:CreateToggle({
+    name = "Gemini", flag = "GeminiCD", value = false,
+    callback = function(v) geminiCDEnabled = v end,
+})
+
+combat:CreateSection({ name = "No Cooldown Gamepasses" })
 
 combat:CreateToggle({
-    name = "Witch CD Reduction",
-    flag = "WitchCD",
-    value = false,
-    callback = function(v)
-        witchCDEnabled = v
-    end,
+    name = "Expression", flag = "ExpressionCD", value = false,
+    callback = function(v) expressionCDEnabled = v end,
+})
+combat:CreateToggle({
+    name = "Ancient", flag = "AncientCD", value = false,
+    callback = function(v) ancientCDEnabled = v end,
+})
+combat:CreateToggle({
+    name = "Dark", flag = "DarkCD", value = false,
+    callback = function(v) darkCDEnabled = v end,
+})
+combat:CreateToggle({
+    name = "Astral", flag = "AstralCD", value = false,
+    callback = function(v) astralCDEnabled = v end,
+})
+combat:CreateToggle({
+    name = "Awakened Soulbind", flag = "AwakenedSoulbindCD", value = false,
+    callback = function(v) awakenedSoulbindCDEnabled = v end,
+})
+combat:CreateToggle({
+    name = "Original Magic", flag = "OriginalMagicCD", value = false,
+    callback = function(v) originalMagicCDEnabled = v end,
+})
+combat:CreateToggle({
+    name = "Connective", flag = "ConnectiveCD", value = false,
+    callback = function(v) connectiveCDEnabled = v end,
 })
 
--- ============================================================
--- ESP TAB
--- ============================================================
 local esp = window:CreateTab({ name = "ESP" })
 esp:CreateSection({ name = "Players" })
 
@@ -1484,46 +1593,22 @@ esp:CreateToggle({
         espFlags.enabled = v
     end,
 })
-
-esp:CreateToggle({
-    name = "Username", flag = "ESPName", value = espFlags.name,
-    callback = function(v) espFlags.name = v end,
-})
-
-esp:CreateToggle({
-    name = "Species", flag = "ESPSpecies", value = espFlags.species,
-    callback = function(v) espFlags.species = v end,
-})
-
-esp:CreateToggle({
-    name = "Bloodline", flag = "ESPBloodline", value = espFlags.bloodline,
-    callback = function(v) espFlags.bloodline = v end,
-})
-
-esp:CreateToggle({
-    name = "Health Bar", flag = "ESPHealth", value = espFlags.health,
-    callback = function(v) espFlags.health = v end,
-})
-
-esp:CreateToggle({
-    name = "Distance", flag = "ESPDistance", value = espFlags.distance,
-    callback = function(v) espFlags.distance = v end,
-})
-
-esp:CreateToggle({
-    name = "Active Ability", flag = "ESPSpell", value = espFlags.spellESP,
-    callback = function(v) espFlags.spellESP = v end,
-})
-
-esp:CreateToggle({
-    name = "Show When Invisible", flag = "ESPVisible", value = espFlags.visESP,
-    callback = function(v) espFlags.visESP = v end,
-})
-
-esp:CreateToggle({
-    name = "Show Hollowed Totem", flag = "TotemESP", value = espFlags.totemESP,
-    callback = function(v) espFlags.totemESP = v end,
-})
+esp:CreateToggle({ name = "Username", flag = "ESPName", value = espFlags.name,
+    callback = function(v) espFlags.name = v end })
+esp:CreateToggle({ name = "Species", flag = "ESPSpecies", value = espFlags.species,
+    callback = function(v) espFlags.species = v end })
+esp:CreateToggle({ name = "Bloodline", flag = "ESPBloodline", value = espFlags.bloodline,
+    callback = function(v) espFlags.bloodline = v end })
+esp:CreateToggle({ name = "Health Bar", flag = "ESPHealth", value = espFlags.health,
+    callback = function(v) espFlags.health = v end })
+esp:CreateToggle({ name = "Distance", flag = "ESPDistance", value = espFlags.distance,
+    callback = function(v) espFlags.distance = v end })
+esp:CreateToggle({ name = "Active Ability", flag = "ESPSpell", value = espFlags.spellESP,
+    callback = function(v) espFlags.spellESP = v end })
+esp:CreateToggle({ name = "Show When Invisible", flag = "ESPVisible", value = espFlags.visESP,
+    callback = function(v) espFlags.visESP = v end })
+esp:CreateToggle({ name = "Show Hollowed Totem", flag = "TotemESP", value = espFlags.totemESP,
+    callback = function(v) espFlags.totemESP = v end })
 
 esp:CreateSlider({
     name = "Max Distance", flag = "ESPMaxDist",
@@ -1533,30 +1618,16 @@ esp:CreateSlider({
 
 esp:CreateSection({ name = "Colors" })
 
-esp:CreateColorPicker({
-    name = "Username Color", color = COLORS.name, flag = "ColorName",
-    callback = function(c) COLORS.name = c end,
-})
-
-esp:CreateColorPicker({
-    name = "Species Color", color = COLORS.species, flag = "ColorSpecies",
-    callback = function(c) COLORS.species = c end,
-})
-
-esp:CreateColorPicker({
-    name = "Bloodline Color", color = COLORS.bloodline, flag = "ColorBloodline",
-    callback = function(c) COLORS.bloodline = c end,
-})
-
-esp:CreateColorPicker({
-    name = "Distance Color", color = COLORS.dist, flag = "ColorDistance",
-    callback = function(c) COLORS.dist = c end,
-})
-
-esp:CreateColorPicker({
-    name = "Spell Color", color = COLORS.spell, flag = "ColorSpell",
-    callback = function(c) COLORS.spell = c end,
-})
+esp:CreateColorPicker({ name = "Username Color", color = COLORS.name, flag = "ColorName",
+    callback = function(c) COLORS.name = c end })
+esp:CreateColorPicker({ name = "Species Color", color = COLORS.species, flag = "ColorSpecies",
+    callback = function(c) COLORS.species = c end })
+esp:CreateColorPicker({ name = "Bloodline Color", color = COLORS.bloodline, flag = "ColorBloodline",
+    callback = function(c) COLORS.bloodline = c end })
+esp:CreateColorPicker({ name = "Distance Color", color = COLORS.dist, flag = "ColorDistance",
+    callback = function(c) COLORS.dist = c end })
+esp:CreateColorPicker({ name = "Spell Color", color = COLORS.spell, flag = "ColorSpell",
+    callback = function(c) COLORS.spell = c end })
 
 esp:CreateButton({
     name = "Reset All Colors",
@@ -1577,9 +1648,6 @@ esp:CreateButton({
     end,
 })
 
--- ============================================================
--- ASSISTANCE TAB
--- ============================================================
 local assistance = window:CreateTab({ name = "Assistance" })
 
 assistance:CreateSection({ name = "Location Teleports" })
@@ -1614,9 +1682,7 @@ assistance:CreateButton({
 assistance:CreateSection({ name = "Movement" })
 
 assistance:CreateToggle({
-    name = "NoClip",
-    flag = "NoclipEnabled",
-    value = false,
+    name = "NoClip", flag = "NoclipEnabled", value = false,
     callback = function(v)
         noclipEnabled = v
         local char = LocalPlayer.Character
@@ -1630,19 +1696,16 @@ assistance:CreateToggle({
     end,
 })
 
--- ============================================================
--- MORA MISERIUM (AUTO-STRUGGLE)
--- ============================================================
 assistance:CreateSection({ name = "Mora Miserium challenge" })
 
 assistance:CreateToggle({
-    name = "Auto Struggle Mini-Game",
-    flag = "AutoStruggle",
-    value = false,
+    name = "Auto Struggle Mini-Game", flag = "AutoStruggle", value = false,
     callback = function(v)
         autoStruggleEnabled = v
         if not v then
             lastProcessedText = ""
+        else
+            nonAsciiWarned = false
         end
         NotifySafe({
             title = "Mora Miserium",
@@ -1652,17 +1715,11 @@ assistance:CreateToggle({
     end,
 })
 
--- ============================================================
--- WEATHER
--- ============================================================
 assistance:CreateSection({ name = "Weather" })
 
 assistance:CreateDropdown({
     name = "Weather Preset",
-    options = {
-        "day", "sundown", "night", "dawn",
-        "foggy", "rain", "red_storm",
-    },
+    options = { "day", "sundown", "night", "dawn", "foggy", "rain", "red_storm" },
     flag = "WeatherPreset",
     value = currentPresetName or "day",
     callback = function(selected)
@@ -1672,12 +1729,9 @@ assistance:CreateDropdown({
 })
 
 assistance:CreateToggle({
-    name = "Global Shadows",
-    flag = "WeatherGlobalShadows",
+    name = "Global Shadows", flag = "WeatherGlobalShadows",
     value = originalLighting.GlobalShadows,
-    callback = function(v)
-        pcall(function() Lighting.GlobalShadows = v end)
-    end,
+    callback = function(v) pcall(function() Lighting.GlobalShadows = v end) end,
 })
 
 assistance:CreateButton({
@@ -1691,30 +1745,31 @@ assistance:CreateButton({
     end,
 })
 
--- ============================================================
--- PERFORMANCE
--- ============================================================
 assistance:CreateSection({ name = "Performance" })
 
 assistance:CreateToggle({
-    name = "Enable FPS Boost",
-    flag = "FPSBoostEnabled",
-    value = false,
+    name = "Enable FPS Boost", flag = "FPSBoostEnabled", value = false,
     callback = function(v)
         fpsBoostEnabled = v
         if v then
             originalParticleStates = {}
-            for _, obj in ipairs(workspace:GetDescendants()) do
-                if obj:IsA("ParticleEmitter")
-                    or obj:IsA("Trail")
-                    or obj:IsA("Smoke")
-                    or obj:IsA("Fire")
-                    or obj:IsA("Sparkles")
-                    or obj:IsA("Beam") then
-                    originalParticleStates[obj] = obj.Enabled
-                    obj.Enabled = false
+            cleanupParticleRefs()
+            task.spawn(function()
+                local count = 0
+                for _, obj in ipairs(workspace:GetDescendants()) do
+                    if obj:IsA("ParticleEmitter")
+                        or obj:IsA("Trail")
+                        or obj:IsA("Smoke")
+                        or obj:IsA("Fire")
+                        or obj:IsA("Sparkles")
+                        or obj:IsA("Beam") then
+                        originalParticleStates[obj] = obj.Enabled
+                        obj.Enabled = false
+                        count += 1
+                        if count % 500 == 0 then task.wait() end
+                    end
                 end
-            end
+            end)
             pcall(function()
                 settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
             end)
@@ -1726,53 +1781,19 @@ assistance:CreateToggle({
     end,
 })
 
--- ============================================================
--- INFORMATION TAB
--- ============================================================
-local infoTab = window:CreateTab({ name = "Information" })
+task.spawn(function()
+    while keepAliveRunning do
+        task.wait(30)
+        if fpsBoostEnabled then cleanupParticleRefs() end
+    end
+end)
 
-infoTab:CreateSection({ name = "Heyy ^.^" })
-infoTab:CreateDivider()
-
-infoTab:CreateSection({ name = "Hey this section is just for information based on some features" })
-infoTab:CreateDivider()
-
-infoTab:CreateSection({ name = "Ability CD" })
-infoTab:CreateSection({ name = "Vampire kit has no cooldowns" })
-infoTab:CreateDivider()
-
-infoTab:CreateSection({ name = "Wolf Kit" })
-infoTab:CreateSection({ name = "only some work (Clawed Boxing, Gut Kick, Menacing Glare)" })
-infoTab:CreateSection({ name = "most of these you need to fully do for the cd to return." })
-infoTab:CreateDivider()
-
-infoTab:CreateSection({ name = "Witch Kit" })
-infoTab:CreateSection({ name = "Witch is the same as wolf, only some abilitieswork " })
-infoTab:CreateSection({ name = "abilitys are Ictus, Aquamalia, Immobilus, Invisique, Ossox, Poena Doloris" })
-infoTab:CreateSection({ name = " Poena Doloris" })
-infoTab:CreateDivider()
-
-infoTab:CreateDivider()
-
-infoTab:CreateSection({ name = "Teleport" })
-infoTab:CreateSection({ name = "Caution: Be careful because it's easily clipped." })
-infoTab:CreateDivider()
-
-infoTab:CreateSection({ name = "Credits" })
-infoTab:CreateSection({ name = "If you see any issues, please dm me. Hope you have fun!" })
-infoTab:CreateDivider()
-
--- ============================================================
--- SETTINGS TAB
--- ============================================================
 local settingsTab = window:CreateTab({ name = "Settings" })
 
 settingsTab:CreateSection({ name = "Staff Monitor" })
 
 settingsTab:CreateToggle({
-    name = "Notify on Staff Join",
-    flag = "StaffNotify",
-    value = false,
+    name = "Notify on Staff Join", flag = "StaffNotify", value = false,
     callback = onStaffToggleChanged,
 })
 
@@ -1904,14 +1925,14 @@ end)
 
 window:Notify({
     title = "Loaded Megs Gui",
-    content = "Thanks for using my gui please look in the information tab",
+    content = "Script loaded successfully!",
     duration = 8,
 })
 
 if bypassRan then
     window:Notify({
         title = "Auto Bypass Enabled",
-        content = "When loading the gui it auto bypasses the auto restriction!",
+        content = "Auto bypass active!",
         duration = 8,
     })
 end
