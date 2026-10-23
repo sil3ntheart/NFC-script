@@ -1,6 +1,6 @@
 -- ============================================================
 -- Rayfield Gen2 — Megs gui (merged with ESP)
--- v1.0.0 — Final Version + Reworked Information Tab
+-- v1.0.1 — Hitbox collision fix + Mora Miserium
 -- ============================================================
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/gen2"))()
 
@@ -8,6 +8,8 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Lighting = game:GetService("Lighting")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local PhysicsService = game:GetService("PhysicsService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
@@ -28,6 +30,19 @@ local bypassRan = false
 local fpsBoostEnabled = false
 local originalParticleStates = {}
 local keepAliveRunning = true
+
+-- ============================================================
+-- HITBOX COLLISION GROUP
+-- ============================================================
+pcall(function()
+    PhysicsService:RegisterCollisionGroup("MegsHitbox")
+end)
+pcall(function()
+    PhysicsService:CollisionGroupSetCollidable("MegsHitbox", "MegsHitbox", false)
+end)
+pcall(function()
+    PhysicsService:CollisionGroupSetCollidable("MegsHitbox", "Default", false)
+end)
 
 -- ============================================================
 -- COMBAT STATE
@@ -57,6 +72,12 @@ local hitboxCharConns = {}
 -- ============================================================
 local noclipEnabled = false
 local originalCollisions = {}
+
+-- ============================================================
+-- MORA MISERIUM (AUTO-STRUGGLE) STATE
+-- ============================================================
+local autoStruggleEnabled = false
+local lastProcessedText = ""
 
 -- ============================================================
 -- STAFF MONITOR STATE
@@ -343,7 +364,7 @@ print("Thanks for using my gui auto bypass is auto enabled when you execute have
 -- ============================================================
 local window = Rayfield:CreateWindow({
     name = "Megs gui",
-    subtitle = "v1.0.0",
+    subtitle = "v1.0.1",
     sidebarLayout = true,
     theme = "cobalt",
     configuration = { autoSave = true, autoLoad = true, fileName = "MegsGuiConfig" },
@@ -379,9 +400,6 @@ local COLORS = {
     totem     = Color3.fromRGB(0x30, 0x54, 0x9C),
 }
 
--- Sync state from autoloaded flags. NOTE: this may run before autoload populates
--- window.Flags on some Rayfield builds; we guard every field so nothing is
--- force-applied unless the flag actually exists.
 local function syncFlagsFromRayfield()
     local F = window.Flags
     if not F then return end
@@ -406,8 +424,6 @@ local function syncFlagsFromRayfield()
     if F.ColorDistance  then COLORS.dist      = F.ColorDistance end
     if F.ColorSpell     then COLORS.spell     = F.ColorSpell end
 
-    -- Only apply weather if a saved preset exists — do NOT force "day" on
-    -- fresh load, that used to overwrite the game's native weather.
     if F.WeatherPreset ~= nil and weatherPresets[F.WeatherPreset] then
         currentPresetName = F.WeatherPreset
         applyPreset(F.WeatherPreset)
@@ -427,6 +443,8 @@ local function syncFlagsFromRayfield()
 
     if F.StaffNotify ~= nil then staffNotifyEnabled = F.StaffNotify end
     if F.NoclipEnabled ~= nil then noclipEnabled = F.NoclipEnabled end
+
+    if F.AutoStruggle ~= nil then autoStruggleEnabled = F.AutoStruggle end
 
     if F.Theme then
         pcall(function() window:ChangeTheme(F.Theme) end)
@@ -595,6 +613,57 @@ task.spawn(function()
                     if part:IsA("BasePart") and part.CanCollide then
                         pcall(function() part.CanCollide = false end)
                     end
+                end
+            end
+        end
+    end
+end)
+
+-- ============================================================
+-- MORA MISERIUM (AUTO-STRUGGLE) LOGIC
+-- ============================================================
+local function getStruggleTextLabel()
+    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+    if not playerGui then return nil end
+    local effects = playerGui:FindFirstChild("Effects")
+    if not effects then return nil end
+    local system = effects:FindFirstChild("AbilityStruggleSystem")
+                or effects:FindFirstChild("AStruggleSystem")
+    if not system then return nil end
+    local frame = system:FindFirstChild("Frame")
+    if not frame then return nil end
+    return frame:FindFirstChild("TextLabel")
+end
+
+local function getKeyCode(char)
+    char = string.upper(char)
+    if char:match("^[A-Z]$") then
+        return Enum.KeyCode[char]
+    end
+    return nil
+end
+
+task.spawn(function()
+    while keepAliveRunning do
+        task.wait()
+        if autoStruggleEnabled then
+            local textLabel = getStruggleTextLabel()
+            if textLabel and textLabel.Visible then
+                local currentText = textLabel.Text
+                if #currentText == 1 and currentText ~= lastProcessedText then
+                    local keyCode = getKeyCode(currentText)
+                    if keyCode then
+                        lastProcessedText = currentText
+                        pcall(function()
+                            VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
+                        end)
+                        task.wait(0.02)
+                        pcall(function()
+                            VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
+                        end)
+                    end
+                elseif #currentText == 0 then
+                    lastProcessedText = ""
                 end
             end
         end
@@ -964,6 +1033,8 @@ local function restoreHitbox(player)
             hrp.Size = original.size
             hrp.Transparency = original.transparency
             hrp.CanCollide = original.canCollide
+            hrp.Massless = original.massless
+            hrp.CollisionGroup = original.collisionGroup
         end)
     end
 end
@@ -982,6 +1053,8 @@ local function applyHitbox(player)
             size = hrp.Size,
             transparency = hrp.Transparency,
             canCollide = hrp.CanCollide,
+            massless = hrp.Massless,
+            collisionGroup = hrp.CollisionGroup,
         }
     end
 
@@ -989,6 +1062,10 @@ local function applyHitbox(player)
         hrp.Size = hitboxSize
         hrp.Transparency = hitboxTransparency
         hrp.CanCollide = false
+        hrp.CanTouch = false
+        hrp.CanQuery = true          -- keep true so raycasts/hit detection still work
+        hrp.Massless = true
+        hrp.CollisionGroup = "MegsHitbox"
     end)
 end
 
@@ -1022,6 +1099,24 @@ task.spawn(function()
                     hookHitboxForPlayer(player)
                     applyHitbox(player)
                 end
+            end
+        end
+    end
+end)
+
+-- ============================================================
+-- SAFETY: never let our own character collide with hitboxes
+-- ============================================================
+task.spawn(function()
+    while keepAliveRunning do
+        task.wait(0.25)
+        if hitboxEnabled then
+            local myChar = LocalPlayer.Character
+            if myChar then
+                -- Re-assert the collision group rule in case the game resets it
+                pcall(function()
+                    PhysicsService:CollisionGroupSetCollidable("MegsHitbox", "Default", false)
+                end)
             end
         end
     end
@@ -1079,8 +1174,6 @@ local function renderLoop()
             local st = espState[player]
             if st then st.hidden = true end
         end
-        -- Totems are controlled independently so the user can keep totem ESP
-        -- on without the full player ESP.
         if espFlags.totemESP then
             if (now - lastESPRender) >= ESP_RENDER_INTERVAL then
                 lastESPRender = now
@@ -1238,6 +1331,9 @@ local function fullUnload()
     vampireCDEnabled = false
     wolfCDEnabled    = false
     witchCDEnabled   = false
+
+    autoStruggleEnabled = false
+    lastProcessedText = ""
 
     staffNotifyEnabled = false
     if staffOnJoinConnection then
@@ -1535,6 +1631,28 @@ assistance:CreateToggle({
 })
 
 -- ============================================================
+-- MORA MISERIUM (AUTO-STRUGGLE)
+-- ============================================================
+assistance:CreateSection({ name = "Mora Miserium challenge" })
+
+assistance:CreateToggle({
+    name = "Auto Struggle Mini-Game",
+    flag = "AutoStruggle",
+    value = false,
+    callback = function(v)
+        autoStruggleEnabled = v
+        if not v then
+            lastProcessedText = ""
+        end
+        NotifySafe({
+            title = "Mora Miserium",
+            content = v and "Auto-Struggle Enabled" or "Auto-Struggle Disabled",
+            duration = 3,
+        })
+    end,
+})
+
+-- ============================================================
 -- WEATHER
 -- ============================================================
 assistance:CreateSection({ name = "Weather" })
@@ -1769,11 +1887,8 @@ settingsTab:CreateButton({
     end,
 })
 
--- Run the flag sync AFTER the window has been built so autoload has a chance
--- to populate window.Flags first.
 task.defer(function()
     syncFlagsFromRayfield()
-    -- Re-apply live state to anything that was already running.
     if hitboxEnabled then
         for _, player in ipairs(Players:GetPlayers()) do
             if player ~= LocalPlayer and player.Character then
@@ -1799,4 +1914,4 @@ if bypassRan then
         content = "When loading the gui it auto bypasses the auto restriction!",
         duration = 8,
     })
-end 
+end
