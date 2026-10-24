@@ -1,61 +1,60 @@
 -- ============================================================
 -- Megs Gui v1.0.0
--- Combat / ESP / Assistance / Settings
+-- Combat / ESP / Assistance / Settings / Information
 -- + Dj Challenge | Hitbox | Auto Bypass | Teleports | Noclip
--- + Hollowed Totem ESP | CD Removal (Base/Coins/Gamepass)
+-- + Hollowed Totem ESP | CD Removal | Target Visualizer | Staff Monitor
 -- ============================================================
+
+-- ── Services FIRST ─────────────────────────────────────────
+local Players     = game:GetService("Players")
+local RunService  = game:GetService("RunService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
+local Camera      = workspace.CurrentCamera
+
+local floor, max, clamp = math.floor, math.max, math.clamp
+local abs, sqrt = math.abs, math.sqrt
 
 -- ── Auto Bypass ─────────────────────────────────────────────
 do
     pcall(function()
-        local ReplicatedStorage = game:GetService("ReplicatedStorage")
         local remote = ReplicatedStorage:FindFirstChild("AntiCheatRemote")
         if not remote then return end
         if type(getgc) ~= "function" or type(debug) ~= "table" then return end
-        if type(debug.getinfo) ~= "function" or type(debug.getupvalue) ~= "function" then return end
-
         local WANTED_UPVALUES = 7
-
         local function holdsRemote(fn)
-            for index = 1, WANTED_UPVALUES do
-                local ok2, value = pcall(debug.getupvalue, fn, index)
-                if ok2 and value == remote then return true end
+            for i = 1, WANTED_UPVALUES do
+                local ok, v = pcall(debug.getupvalue, fn, i)
+                if ok and v == remote then return true end
             end
             return false
         end
-
         local function findFlag()
-            local ok2, objects = pcall(getgc)
-            if not ok2 or type(objects) ~= "table" then return nil end
-            for _, value in ipairs(objects) do
-                if type(value) == "function" then
-                    local okInfo, info = pcall(debug.getinfo, value)
-                    if okInfo and type(info) == "table" and info.nups == WANTED_UPVALUES then
-                        if holdsRemote(value) then return value end
-                    end
+            local ok, objs = pcall(getgc)
+            if not ok then return nil end
+            for _, v in ipairs(objs) do
+                if type(v) == "function" then
+                    local ok2, info = pcall(debug.getinfo, v)
+                    if ok2 and info and info.nups == WANTED_UPVALUES and holdsRemote(v) then return v end
                 end
             end
             return nil
         end
-
         local flag = findFlag()
         if not flag then return end
-
         if type(hookfunction) == "function" then
             pcall(hookfunction, flag, function() end)
             return
         end
-
         task.spawn(function()
             while true do
-                for index = 1, WANTED_UPVALUES do
-                    local ok2, value = pcall(debug.getupvalue, flag, index)
-                    if ok2 then
-                        if type(value) == "number" and value > 0 then
-                            pcall(debug.setupvalue, flag, index, 0)
-                        elseif type(value) == "table" then
-                            pcall(table.clear, value)
-                        end
+                for i = 1, WANTED_UPVALUES do
+                    local ok, v = pcall(debug.getupvalue, flag, i)
+                    if ok then
+                        if type(v) == "number" and v > 0 then pcall(debug.setupvalue, flag, i, 0)
+                        elseif type(v) == "table" then pcall(table.clear, v) end
                     end
                 end
                 task.wait(1)
@@ -65,15 +64,6 @@ do
 end
 
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/gen2"))()
-
-local Players     = game:GetService("Players")
-local RunService  = game:GetService("RunService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local LocalPlayer = Players.LocalPlayer
-local Camera      = workspace.CurrentCamera
-
-local floor, max, clamp = math.floor, math.max, math.clamp
 
 -- ============================================================
 -- TP Locations
@@ -87,7 +77,6 @@ local LOCATIONS = {
     ["Hidden TV Room"] = { placeId = 137096573231798, position = Vector3.new(-1166.15, 1.46, -714.19) },
     ["Grill"] = { placeId = 137096573231798, position = Vector3.new(-1213.58, 34.76, -1738.41) },
 }
-
 local LOCATION_NAMES = {}
 for name in pairs(LOCATIONS) do table.insert(LOCATION_NAMES, name) end
 table.sort(LOCATION_NAMES)
@@ -95,13 +84,11 @@ local selectedLocation = LOCATION_NAMES[1]
 
 local function teleportTo(name)
     local loc = LOCATIONS[name]
-    if not loc then return false, "Unknown location: " .. tostring(name) end
-    if loc.placeId ~= game.PlaceId then
-        return false, "This location is for a different place (ID " .. loc.placeId .. ")"
-    end
+    if not loc then return false, "Unknown location" end
+    if loc.placeId ~= game.PlaceId then return false, "Wrong place ID" end
     local char = LocalPlayer.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return false, "Character not spawned" end
+    if not hrp then return false, "Not spawned" end
     hrp.CFrame = CFrame.new(loc.position)
     return true
 end
@@ -110,43 +97,20 @@ end
 -- Shared state
 -- ============================================================
 local flags = {
-    espEnabled   = false,
-    name         = true,
-    bloodline    = true,
-    species      = true,
-    healthBar    = true,
-    distance     = true,
-    spellESP     = true,
-    visESP       = true,
-    maxDist      = 2000,
-
-    hitboxEnabled = false,
-    hitboxShow    = false,
-    hitboxSize    = 10,
-
-    djChallenge   = false,
-    noclip        = false,
-
-    spellColor    = Color3.fromRGB(255, 140, 0),
-    classColor    = Color3.fromRGB(200, 160, 255),
-    totemColor    = Color3.fromRGB(0, 140, 255),
-
-    totemESP      = false,
-
-    vampireCD          = false,
-    wolfCD             = false,
-    witchCD            = false,
-    unstableCD         = false,
-    serumCD            = false,
-    soulbindCD         = false,
-    geminiCD           = false,
-    expressionCD       = false,
-    ancientCD          = false,
-    darkCD             = false,
-    astralCD           = false,
-    awakenedSoulbindCD = false,
-    originalMagicCD    = false,
-    connectiveCD       = false,
+    espEnabled = false, name = true, bloodline = true, species = true,
+    healthBar = true, distance = true, spellESP = true, visESP = true, maxDist = 2000,
+    hitboxEnabled = false, hitboxShow = false, hitboxSize = 10,
+    djChallenge = false, noclip = false,
+    spellColor = Color3.fromRGB(255, 140, 0),
+    classColor = Color3.fromRGB(200, 160, 255),
+    totemColor = Color3.fromRGB(0, 140, 255),
+    totemESP = false,
+    targetVisEnabled = false, targetVisColor = Color3.fromRGB(255, 60, 60),
+    staffNotify = false,
+    vampireCD = false, wolfCD = false, witchCD = false,
+    unstableCD = false, serumCD = false, soulbindCD = false, geminiCD = false,
+    expressionCD = false, ancientCD = false, darkCD = false, astralCD = false,
+    awakenedSoulbindCD = false, originalMagicCD = false, connectiveCD = false,
 }
 
 local CLASS_COLORS = {
@@ -157,11 +121,8 @@ local CLASS_COLORS = {
     Psychic = flags.classColor, HellSpirit = flags.classColor, Human = flags.classColor,
 }
 local CLASS_PRIORITY = {
-    "Tribrid","OriginalHybrid","Hybrid",
-    "OriginalVampire","OriginalWerewitch","Werewitch",
-    "Vampire","Werewolf",
-    "Heretic","Siphoner","Witch",
-    "Phoenix","Psychic","HellSpirit","Human",
+    "Tribrid","OriginalHybrid","Hybrid","OriginalVampire","OriginalWerewitch","Werewitch",
+    "Vampire","Werewolf","Heretic","Siphoner","Witch","Phoenix","Psychic","HellSpirit","Human",
 }
 
 local originalHRP = {}
@@ -170,15 +131,14 @@ local function trackConn(c) table.insert(connections, c); return c end
 
 local function isAlive(inst)
     if not inst then return false end
-    local ok, parent = pcall(function() return inst.Parent end)
-    return ok and parent ~= nil
+    local ok, p = pcall(function() return inst.Parent end)
+    return ok and p ~= nil
 end
 
 -- ============================================================
--- LivingThings / CastingSpells helpers
+-- LivingThings helpers
 -- ============================================================
 local livingThingsCache = nil
-
 local function getLivingThings()
     local lt = livingThingsCache
     if lt and isAlive(lt) then return lt end
@@ -186,15 +146,55 @@ local function getLivingThings()
     livingThingsCache = lt
     return lt
 end
-
 local function getLivingEntry(player)
     local lt = getLivingThings()
     return lt and lt:FindFirstChild(player.Name)
 end
-
 local function getCastingFolder(player)
     local entry = getLivingEntry(player)
     return entry and entry:FindFirstChild("CastingSpells")
+end
+
+-- ============================================================
+-- Staff Monitor state
+-- ============================================================
+local STAFF_GROUP_ID = 35585413
+local STAFF_RANK_THRESHOLD = 5
+local staffNotifyEnabled = false
+local staffOnJoinConnection = nil
+local currentStaff = {}
+
+local function getStaffInfo(player)
+    local ok, rank = pcall(function() return player:GetRankInGroup(STAFF_GROUP_ID) end)
+    if not ok then return nil end
+    if rank < STAFF_RANK_THRESHOLD then return nil end
+    local ok2, role = pcall(function() return player:GetRoleInGroup(STAFF_GROUP_ID) end)
+    return { rank = rank, role = ok2 and role or "Staff" }
+end
+
+local function checkAndAddStaff(player)
+    if player == LocalPlayer or not player.Parent then return nil end
+    local info = getStaffInfo(player)
+    if info then currentStaff[player] = info; return info end
+    return nil
+end
+
+local function setupStaffJoinWatcher()
+    if staffOnJoinConnection then pcall(function() staffOnJoinConnection:Disconnect() end) end
+    staffOnJoinConnection = Players.PlayerAdded:Connect(function(player)
+        task.wait(1.5)
+        local info = checkAndAddStaff(player)
+        if info and staffNotifyEnabled and window then
+            pcall(function()
+                window:Notify({
+                    title = "Staff Joined",
+                    content = (player.DisplayName or player.Name) .. " (" .. info.role .. ")",
+                    duration = 8,
+                })
+            end)
+        end
+    end)
+    trackConn(staffOnJoinConnection)
 end
 
 -- ============================================================
@@ -208,46 +208,20 @@ do
 end
 
 local CD_KIT_LISTS = {
-    vampireCD = {
-        "NeckSnap", "WristSnap", "BloodHeal", "Feed", "SpineBreak",
-        "EyeGouge", "ThroatRip", "BlinkAttack", "MistMaw", "MistCharge",
-        "SkyfallReaver", "VampireStep",
-    },
-    wolfCD = { "ClawedBoxing", "GutKick", "MenacingGlare", "NeckSnap" },
-    witchCD = { "Ictus", "Aquamalia", "Immobilus", "Invisique", "Ossox", "PoenaDoloris" },
-    unstableCD = { "Dissulta", "QuarantineSpell", "Stellabunde", "TelekineticScream" },
-    serumCD = { "OverheadCrush", "SerumBite", "StakeThrow", "KnuckleDown" },
-    soulbindCD = {
-        "TelekineticWristSnap", "SanguisSicco", "SanguisDucatur", "OmnisDormit",
-        "HarvestOverflow", "NemoUnusAnimabusCarnem",
-    },
-    geminiCD = {
-        "ISaidHey", "Ignalusa", "Ignarious", "PervenioSupervenioAdvehor", "ResistusMaledi",
-    },
-    expressionCD = {
-        "Vados", "Restraint", "PhasmatosAerisCirculo", "DoloremInferunt", "Sanitatum",
-    },
-    ancientCD = { "VineManipulation", "SequunturSomnia", "MemoryOverload", "AhShaLana" },
-    darkCD = {
-        "InvidiumCalamactus", "DarkBlast", "DarkBeam", "Autem", "Ascendo",
-        "AdvancedJapanesePurgingSpell", "SiphonHug", "MagicRevolve", "DarkMagicLocator",
-    },
-    astralCD = {
-        "CrowTransformation", "BrainMelt", "CardiacArrest", "PhaseCollapse", "SygilSpell",
-        "VampirismWeakening", "AncestralEradication", "ToxinsRemedy",
-    },
-    awakenedSoulbindCD = {
-        "SonicScream", "Soulbinding", "TelekineticCombo", "HarvestChaos", "LightningStrikeSpell",
-        "MassTelekineticSnap", "MemoryWipingSpell", "NemoUnusAnimabusCarnem",
-    },
-    originalMagicCD = {
-        "AdvancedPainInfliction", "CrowStorm", "LinkShatter", "ProtectiveSaltCircle",
-        "RestrainingChains", "VictasConfracta", "VampirismReversal", "BloodlineChannel",
-    },
-    connectiveCD = {
-        "SoulLink", "ToolDestruction", "AdvancedAneurysm", "Wraithstep", "Victas",
-        "SanguinemConfractus", "FatedPursuit", "EnchantedBind", "ConnectiveField",
-    },
+    vampireCD = { "NeckSnap","WristSnap","BloodHeal","Feed","SpineBreak","EyeGouge","ThroatRip","BlinkAttack","MistMaw","MistCharge","SkyfallReaver","VampireStep" },
+    wolfCD = { "ClawedBoxing","GutKick","MenacingGlare","NeckSnap" },
+    witchCD = { "Ictus","Aquamalia","Immobilus","Invisique","Ossox","PoenaDoloris" },
+    unstableCD = { "Dissulta","QuarantineSpell","Stellabunde","TelekineticScream" },
+    serumCD = { "OverheadCrush","SerumBite","StakeThrow","KnuckleDown" },
+    soulbindCD = { "TelekineticWristSnap","SanguisSicco","SanguisDucatur","OmnisDormit","HarvestOverflow","NemoUnusAnimabusCarnem" },
+    geminiCD = { "ISaidHey","Ignalusa","Ignarious","PervenioSupervenioAdvehor","ResistusMaledi" },
+    expressionCD = { "Vados","Restraint","PhasmatosAerisCirculo","DoloremInferunt","Sanitatum" },
+    ancientCD = { "VineManipulation","SequunturSomnia","MemoryOverload","AhShaLana" },
+    darkCD = { "InvidiumCalamactus","DarkBlast","DarkBeam","Autem","Ascendo","AdvancedJapanesePurgingSpell","SiphonHug","MagicRevolve","DarkMagicLocator" },
+    astralCD = { "CrowTransformation","BrainMelt","CardiacArrest","PhaseCollapse","SygilSpell","VampirismWeakening","AncestralEradication","ToxinsRemedy" },
+    awakenedSoulbindCD = { "SonicScream","Soulbinding","TelekineticCombo","HarvestChaos","LightningStrikeSpell","MassTelekineticSnap","MemoryWipingSpell","NemoUnusAnimabusCarnem" },
+    originalMagicCD = { "AdvancedPainInfliction","CrowStorm","LinkShatter","ProtectiveSaltCircle","RestrainingChains","VictasConfracta","VampirismReversal","BloodlineChannel" },
+    connectiveCD = { "SoulLink","ToolDestruction","AdvancedAneurysm","Wraithstep","Victas","SanguinemConfractus","FatedPursuit","EnchantedBind","ConnectiveField" },
 }
 
 local function fireCDList(list)
@@ -255,10 +229,9 @@ local function fireCDList(list)
     local myEntry = getLivingEntry(LocalPlayer)
     local casting = myEntry and myEntry:FindFirstChild("CastingSpells")
     if not casting then return end
-
     for _, abilityName in ipairs(list) do
-        local abilityBool = casting:FindFirstChild(abilityName)
-        if abilityBool and abilityBool:IsA("BoolValue") and abilityBool.Value == true then
+        local b = casting:FindFirstChild(abilityName)
+        if b and b:IsA("BoolValue") and b.Value then
             pcall(function()
                 if type(firesignal) == "function" then
                     firesignal(CooldownOffEvent.OnClientEvent, abilityName)
@@ -273,46 +246,41 @@ if CooldownOffEvent then
         while true do
             task.wait(0.05)
             for kitFlag, list in pairs(CD_KIT_LISTS) do
-                if flags[kitFlag] then
-                    pcall(fireCDList, list)
-                end
+                if flags[kitFlag] then pcall(fireCDList, list) end
             end
         end
     end))
 end
 
 -- ============================================================
--- Hollowed Totem ESP (workspace.map.Totems scanner)
+-- Hollowed Totem ESP
 -- ============================================================
 local totemEntries = {}
-local TOTEM_UPDATE_INTERVAL = 0.25
 local lastTotemUpdate = 0
 
 local function createTotemLabel(part)
-    local billboard = Instance.new("BillboardGui")
-    billboard.Name = "TotemLabel"
-    billboard.Adornee = part
-    billboard.Size = UDim2.new(0, 220, 0, 20)
-    billboard.StudsOffsetWorldSpace = Vector3.new(0, 3, 0)
-    billboard.AlwaysOnTop = true
-    billboard.LightInfluence = 0
-    billboard.ResetOnSpawn = false
-    billboard.Enabled = false
-
-    local label = Instance.new("TextLabel")
-    label.BackgroundTransparency = 1
-    label.Size = UDim2.new(1, 0, 1, 0)
-    label.Font = Enum.Font.GothamBold
-    label.TextSize = 14
-    label.TextColor3 = flags.totemColor
-    label.TextStrokeTransparency = 0.3
-    label.TextStrokeColor3 = Color3.new(0, 0, 0)
-    label.Text = ""
-    label.Parent = billboard
-
-    billboard.Parent = part
-    totemEntries[part] = billboard
-    return billboard
+    local b = Instance.new("BillboardGui")
+    b.Name = "TotemLabel"
+    b.Adornee = part
+    b.Size = UDim2.new(0, 220, 0, 20)
+    b.StudsOffsetWorldSpace = Vector3.new(0, 3, 0)
+    b.AlwaysOnTop = true
+    b.LightInfluence = 0
+    b.ResetOnSpawn = false
+    b.Enabled = false
+    local lbl = Instance.new("TextLabel")
+    lbl.BackgroundTransparency = 1
+    lbl.Size = UDim2.new(1, 0, 1, 0)
+    lbl.Font = Enum.Font.GothamBold
+    lbl.TextSize = 14
+    lbl.TextColor3 = flags.totemColor
+    lbl.TextStrokeTransparency = 0.3
+    lbl.TextStrokeColor3 = Color3.new(0, 0, 0)
+    lbl.Text = ""
+    lbl.Parent = b
+    b.Parent = part
+    totemEntries[part] = b
+    return b
 end
 
 local function removeTotemObjects(part)
@@ -324,55 +292,213 @@ end
 local function renderTotems()
     local mapFolder = workspace:FindFirstChild("map")
     local totemFolder = mapFolder and mapFolder:FindFirstChild("Totems")
-
     if not totemFolder then
-        for part in pairs(totemEntries) do
-            removeTotemObjects(part)
-        end
+        for part in pairs(totemEntries) do removeTotemObjects(part) end
         return
     end
-
-    local activeTotems = {}
+    local active = {}
     local camPos = Camera.CFrame.Position
-
-    for _, totem in ipairs(totemFolder:GetChildren()) do
-        local lowerName = string.lower(totem.Name)
-        if totem.Name == "Totem(PlaceHolder)" or string.find(lowerName, "totem", 1, true) then
-            if totem:IsA("BasePart") then
-                activeTotems[totem] = true
-                local b = totemEntries[totem]
-                if not b or not b.Parent then
-                    b = createTotemLabel(totem)
+    for _, t in ipairs(totemFolder:GetChildren()) do
+        if string.find(string.lower(t.Name), "totem", 1, true) and t:IsA("BasePart") then
+            active[t] = true
+            local b = totemEntries[t] or createTotemLabel(t)
+            if flags.totemESP then
+                local dist = (camPos - t.Position).Magnitude
+                local lbl = b:FindFirstChildOfClass("TextLabel")
+                if lbl then
+                    lbl.Text = string.format("Hollowed Totem (%d)", math.floor(dist))
+                    lbl.TextColor3 = flags.totemColor
                 end
+                b.Enabled = true
+            else
+                b.Enabled = false
+            end
+        end
+    end
+    for p in pairs(totemEntries) do if not active[p] then removeTotemObjects(p) end end
+end
 
-                if flags.totemESP then
-                    local dist = (camPos - totem.Position).Magnitude
-                    local label = b:FindFirstChildOfClass("TextLabel")
-                    if label then
-                        label.Text = string.format("Hollowed Totem (%d)", math.floor(dist))
-                        label.TextColor3 = flags.totemColor
-                    end
-                    b.Enabled = true
-                else
-                    b.Enabled = false
+if RunService then
+    trackConn(RunService.RenderStepped:Connect(function()
+        local now = tick()
+        if (now - lastTotemUpdate) < 0.25 then return end
+        lastTotemUpdate = now
+        pcall(renderTotems)
+    end))
+end
+
+-- ============================================================
+-- TARGET VISUALIZER — tiny flat dot above class title
+-- ============================================================
+local targetDotGui = nil
+local lastTargetVis = 0
+local TARGET_VIS_INTERVAL = 0.1
+
+local function method_cameraCone(camPos, dir)
+    local best, bestDist = nil, math.huge
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then
+            local char = p.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if char and hrp and hum and hum.Health > 0 then
+                local toChar = hrp.Position - camPos
+                local d = toChar.Magnitude
+                if d > 0 and d < bestDist then
+                    if toChar.Unit:Dot(dir) >= 0.85 then best = char; bestDist = d end
                 end
             end
         end
     end
-
-    for part, b in pairs(totemEntries) do
-        if not activeTotems[part] then
-            removeTotemObjects(part)
-        end
-    end
+    return best
 end
 
-trackConn(RunService.RenderStepped:Connect(function()
-    local now = tick()
-    if (now - lastTotemUpdate) < TOTEM_UPDATE_INTERVAL then return end
-    lastTotemUpdate = now
-    pcall(renderTotems)
-end))
+local function method_screenProjection()
+    local vp = Camera.ViewportSize
+    local cx, cy = vp.X / 2, vp.Y / 2
+    local best, bestScore = nil, math.huge
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then
+            local char = p.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if char and hrp and hum and hum.Health > 0 then
+                local sp, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+                if onScreen and sp.Z > 0 then
+                    local sd = sqrt((sp.X - cx)^2 + (sp.Y - cy)^2)
+                    if sd < 200 and sd < bestScore then best = char; bestScore = sd end
+                end
+            end
+        end
+    end
+    return best
+end
+
+local function method_mouseCone()
+    local mouse = UserInputService:GetMouseLocation()
+    local unitRay = Camera:ViewportPointToRay(mouse.X, mouse.Y)
+    local camPos = Camera.CFrame.Position
+    local best, bestDist = nil, math.huge
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then
+            local char = p.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if char and hrp and hum and hum.Health > 0 then
+                local toChar = hrp.Position - camPos
+                local d = toChar.Magnitude
+                if d > 0 and d < bestDist then
+                    if toChar.Unit:Dot(unitRay.Direction) >= 0.85 then best = char; bestDist = d end
+                end
+            end
+        end
+    end
+    return best
+end
+
+local function method_closestToCenter()
+    local vp = Camera.ViewportSize
+    local cx, cy = vp.X / 2, vp.Y / 2
+    local best, bestScore = nil, 400
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then
+            local char = p.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if char and hrp and hum and hum.Health > 0 then
+                local sp = Camera:WorldToViewportPoint(hrp.Position)
+                if sp.Z > 0 then
+                    local sd = sqrt((sp.X - cx)^2 + (sp.Y - cy)^2)
+                    if sd < bestScore then best = char; bestScore = sd end
+                end
+            end
+        end
+    end
+    return best
+end
+
+local function method_nearest()
+    local camPos = Camera.CFrame.Position
+    local best, bestDist = nil, 500
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then
+            local char = p.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if char and hrp and hum and hum.Health > 0 then
+                local d = (camPos - hrp.Position).Magnitude
+                if d < bestDist then best = char; bestDist = d end
+            end
+        end
+    end
+    return best
+end
+
+local function findTarget()
+    local camPos = Camera.CFrame.Position
+    local lookVec = Camera.CFrame.LookVector
+    return method_cameraCone(camPos, lookVec) or
+           method_screenProjection() or
+           method_mouseCone() or
+           method_closestToCenter() or
+           method_nearest()
+end
+
+local function clearTargetVis()
+    if targetDotGui then pcall(function() targetDotGui:Destroy() end); targetDotGui = nil end
+end
+
+local function updateTargetVisualizer()
+    if not flags.targetVisEnabled then clearTargetVis(); return end
+
+    local char = findTarget()
+    if not char then clearTargetVis(); return end
+
+    local head = char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
+    if not head then clearTargetVis(); return end
+
+    if not targetDotGui or targetDotGui.Parent ~= head then
+        clearTargetVis()
+        
+        -- Create a tiny BillboardGui
+        targetDotGui = Instance.new("BillboardGui")
+        targetDotGui.Name = "TargetDot"
+        targetDotGui.Adornee = head
+        targetDotGui.Size = UDim2.new(0, 10, 0, 10) -- Tiny 10x10 pixel space
+        targetDotGui.StudsOffsetWorldSpace = Vector3.new(0, 6, 0) -- Floats above the class text
+        targetDotGui.AlwaysOnTop = true
+        targetDotGui.LightInfluence = 0
+        targetDotGui.ResetOnSpawn = false
+        
+        -- Create the actual dot
+        local dot = Instance.new("Frame")
+        dot.Name = "Dot"
+        dot.BackgroundColor3 = flags.targetVisColor
+        dot.BorderSizePixel = 0
+        dot.Size = UDim2.new(1, 0, 1, 0)
+        dot.Parent = targetDotGui
+        
+        -- Make it circular
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(1, 0)
+        corner.Parent = dot
+        
+        targetDotGui.Parent = head
+    end
+    
+    -- Update color if changed via picker
+    local dot = targetDotGui:FindFirstChild("Dot")
+    if dot then dot.BackgroundColor3 = flags.targetVisColor end
+end
+
+if RunService then
+    trackConn(RunService.RenderStepped:Connect(function()
+        local now = tick()
+        if (now - lastTargetVis) < TARGET_VIS_INTERVAL then return end
+        lastTargetVis = now
+        pcall(updateTargetVisualizer)
+    end))
+end
 
 -- ============================================================
 -- Noclip
@@ -389,57 +515,46 @@ local function applyNoclip(enabled)
         end
         return
     end
-    if noclipConnection then return end
+    if noclipConnection or not RunService then return end
     noclipConnection = RunService.Stepped:Connect(function()
         if not flags.noclip then return end
         local char = LocalPlayer.Character
         if not char then return end
         for _, p in ipairs(char:GetDescendants()) do
-            if p:IsA("BasePart") and p.CanCollide then
-                p.CanCollide = false
-            end
+            if p:IsA("BasePart") and p.CanCollide then p.CanCollide = false end
         end
     end)
 end
 
 -- ============================================================
--- ESP billboard internals
+-- ESP internals
 -- ============================================================
-local espEntries = {}
-local espState   = {}
+local espEntries, espState = {}, {}
 local MAX_TRACKED = 50
 local trackedPlayers, trackedCount = {}, 0
-local ESP_RENDER_INTERVAL = 1 / 60
 local lastESPRender = 0
 
 local function getTitlesGui(character)
     if not character then return nil end
     local head = character:FindFirstChild("Head")
     if head then
-        local titleAtt = head:FindFirstChild("TitleAtt")
-        if titleAtt then
-            local gui = titleAtt:FindFirstChild("TitlesGui")
-            if gui then return gui end
-        end
+        local ta = head:FindFirstChild("TitleAtt")
+        if ta then local g = ta:FindFirstChild("TitlesGui"); if g then return g end end
     end
     local lt = getLivingThings()
     if lt then
         local entry = lt:FindFirstChild(character.Name)
         if entry then
-            local titleAtt = entry:FindFirstChild("TitleAtt")
-            if titleAtt then
-                local gui = titleAtt:FindFirstChild("TitlesGui")
-                if gui then return gui end
-            end
-            local gui = entry:FindFirstChild("TitlesGui")
-            if gui then return gui end
+            local ta = entry:FindFirstChild("TitleAtt")
+            if ta then local g = ta:FindFirstChild("TitlesGui"); if g then return g end end
+            return entry:FindFirstChild("TitlesGui")
         end
     end
     return nil
 end
 
 local function getCharacterBloodline(character, gui, player)
-    local text = nil
+    local text
     if gui then
         local label = gui:FindFirstChild("DisplayName")
         if label and label:IsA("TextLabel") then text = label.Text end
@@ -448,8 +563,7 @@ local function getCharacterBloodline(character, gui, player)
     local first, bloodline = text:match("^(%S+)%s+(.+)$")
     if not bloodline or bloodline == "" then return nil end
     bloodline = bloodline:gsub("%s+$", "")
-    if bloodline == "" then return nil end
-    if first and first:lower() == bloodline:lower() then return nil end
+    if bloodline == "" or (first and first:lower() == bloodline:lower()) then return nil end
     if player and bloodline:lower() == player.Name:lower() then return nil end
     return bloodline
 end
@@ -457,12 +571,9 @@ end
 local function getSpeciesText(character, gui)
     gui = gui or getTitlesGui(character)
     if gui then
-        for _, labelName in ipairs({ "SPECIE", "Specie", "Species", "SPECIES" }) do
-            local label = gui:FindFirstChild(labelName)
-            if label and label:IsA("TextLabel") then
-                local text = label.Text
-                if text and text ~= "" then return tostring(text) end
-            end
+        for _, n in ipairs({ "SPECIE","Specie","Species","SPECIES" }) do
+            local l = gui:FindFirstChild(n)
+            if l and l:IsA("TextLabel") and l.Text ~= "" then return tostring(l.Text) end
         end
     end
     return nil
@@ -470,69 +581,62 @@ end
 
 local function getClassColor(character)
     if not character then return nil, nil end
-    local statuses = character:FindFirstChild("Statuses")
-    if not statuses then return nil, nil end
-    for _, name in ipairs(CLASS_PRIORITY) do
-        local flag = statuses:FindFirstChild(name)
-        if flag and flag:IsA("BoolValue") and flag.Value then
-            return name, CLASS_COLORS[name]
-        end
+    local s = character:FindFirstChild("Statuses")
+    if not s then return nil, nil end
+    for _, n in ipairs(CLASS_PRIORITY) do
+        local f = s:FindFirstChild(n)
+        if f and f:IsA("BoolValue") and f.Value then return n, CLASS_COLORS[n] end
     end
     return nil, nil
 end
 
 local function getActiveSpellName(casting)
     if not casting then return nil end
-    for _, child in ipairs(casting:GetChildren()) do
-        if child:IsA("BoolValue") and child.Value then
-            return child.Name
-        end
+    for _, c in ipairs(casting:GetChildren()) do
+        if c:IsA("BoolValue") and c.Value then return c.Name end
     end
     return nil
 end
 
 local function isInvisible(casting)
     if not casting then return false end
-    local invis = casting:FindFirstChild("Invisique")
-    return invis and invis:IsA("BoolValue") and invis.Value == true
+    local i = casting:FindFirstChild("Invisique")
+    return i and i:IsA("BoolValue") and i.Value
 end
 
 local ROW_HEIGHT = 14
 local BAR_HEIGHT = 3
-local BAR_GAP    = 2
+local BAR_GAP = 2
 
-local function makeLabel(parent, size, color)
-    local lbl = Instance.new("TextLabel")
-    lbl.BackgroundTransparency = 1
-    lbl.Size = UDim2.new(1, 0, 0, size + 2)
-    lbl.Position = UDim2.new(0, 0, 0, 0)
-    lbl.Font = Enum.Font.GothamBold
-    lbl.TextSize = size
-    lbl.TextColor3 = color or Color3.new(1, 1, 1)
-    lbl.TextStrokeTransparency = 0.3
-    lbl.TextStrokeColor3 = Color3.new(0, 0, 0)
-    lbl.Text = ""
-    lbl.Visible = false
-    lbl.Parent = parent
-    return lbl
+local function makeLabel(parent, size)
+    local l = Instance.new("TextLabel")
+    l.BackgroundTransparency = 1
+    l.Size = UDim2.new(1, 0, 0, size + 2)
+    l.Position = UDim2.new(0, 0, 0, 0)
+    l.Font = Enum.Font.GothamBold
+    l.TextSize = size
+    l.TextColor3 = Color3.new(1, 1, 1)
+    l.TextStrokeTransparency = 0.3
+    l.TextStrokeColor3 = Color3.new(0, 0, 0)
+    l.Text = ""
+    l.Visible = false
+    l.Parent = parent
+    return l
 end
 
 local function createESP(player)
     if espEntries[player] then return espEntries[player] end
-
-    local billboard = Instance.new("BillboardGui")
-    billboard.Name = "RayfieldESP_" .. player.Name
-    billboard.Adornee = nil
-    billboard.Size = UDim2.new(0, 200, 0, 120)
-    billboard.StudsOffsetWorldSpace = Vector3.new(0, 3, 0)
-    billboard.AlwaysOnTop = true
-    billboard.LightInfluence = 0
-    billboard.ResetOnSpawn = false
-
+    local b = Instance.new("BillboardGui")
+    b.Name = "RayfieldESP_" .. player.Name
+    b.Size = UDim2.new(0, 200, 0, 120)
+    b.StudsOffsetWorldSpace = Vector3.new(0, 3, 0)
+    b.AlwaysOnTop = true
+    b.LightInfluence = 0
+    b.ResetOnSpawn = false
     local frame = Instance.new("Frame")
     frame.BackgroundTransparency = 1
     frame.Size = UDim2.new(1, 0, 1, 0)
-    frame.Parent = billboard
+    frame.Parent = b
 
     local speciesLbl = makeLabel(frame, 13)
     local nameLbl    = makeLabel(frame, 14)
@@ -546,24 +650,21 @@ local function createESP(player)
     hpBarBg.BackgroundTransparency = 0.4
     hpBarBg.BorderSizePixel = 0
     hpBarBg.Size = UDim2.new(0.4, 0, 0, BAR_HEIGHT)
-    hpBarBg.Position = UDim2.new(0.3, 0, 0, 0)
     hpBarBg.Visible = false
     hpBarBg.Parent = frame
+    local hpFill = Instance.new("Frame")
+    hpFill.BackgroundColor3 = Color3.fromRGB(80, 255, 80)
+    hpFill.BorderSizePixel = 0
+    hpFill.Size = UDim2.new(1, 0, 1, 0)
+    hpFill.Parent = hpBarBg
 
-    local hpBarFill = Instance.new("Frame")
-    hpBarFill.BackgroundColor3 = Color3.fromRGB(80, 255, 80)
-    hpBarFill.BorderSizePixel = 0
-    hpBarFill.Size = UDim2.new(1, 0, 1, 0)
-    hpBarFill.Parent = hpBarBg
-
-    local entry = {
-        gui = billboard, frame = frame,
+    espEntries[player] = {
+        gui = b, frame = frame,
         species = speciesLbl, name = nameLbl, bloodline = bloodLbl,
         spell = spellLbl, invis = invisLbl, distance = distLbl,
-        hpBarBg = hpBarBg, hpBarFill = hpBarFill,
+        hpBarBg = hpBarBg, hpBarFill = hpFill,
     }
-    espEntries[player] = entry
-    return entry
+    return espEntries[player]
 end
 
 local function destroyESP(player)
@@ -572,180 +673,137 @@ local function destroyESP(player)
     espEntries[player] = nil
 end
 
-local function hideAllESP(e)
-    if not e then return end
-    e.gui.Enabled = false
-end
-
-local function trackPlayer(player)
-    if player == LocalPlayer then return end
-    if trackedPlayers[player] then return end
+local function trackPlayer(p)
+    if p == LocalPlayer or trackedPlayers[p] then return end
     if trackedCount >= MAX_TRACKED then return end
-    trackedPlayers[player] = true
+    trackedPlayers[p] = true
     trackedCount = trackedCount + 1
 end
 
-local function untrackPlayer(player)
-    destroyESP(player)
-    if trackedPlayers[player] then
-        trackedPlayers[player] = nil
-        trackedCount = trackedCount - 1
-    end
-    espState[player] = nil
+local function untrackPlayer(p)
+    destroyESP(p)
+    if trackedPlayers[p] then trackedPlayers[p] = nil; trackedCount = trackedCount - 1 end
+    espState[p] = nil
+    currentStaff[p] = nil
 end
 
 trackConn(Players.PlayerAdded:Connect(trackPlayer))
 trackConn(Players.PlayerRemoving:Connect(untrackPlayer))
 for _, p in ipairs(Players:GetPlayers()) do trackPlayer(p) end
 
-local function placeRow(lbl, frame, y)
-    lbl.Position = UDim2.new(0, 0, 0, y)
-    lbl.Visible = true
-end
-
 local function renderESP()
     local now = tick()
-    if (now - lastESPRender) < ESP_RENDER_INTERVAL then return end
+    if (now - lastESPRender) < 1/60 then return end
     lastESPRender = now
-
     if not flags.espEnabled then
-        for _, e in pairs(espEntries) do hideAllESP(e) end
+        for _, e in pairs(espEntries) do if e.gui then e.gui.Enabled = false end end
         return
     end
-
-    local camPos  = Camera.CFrame.Position
-    local maxDist = flags.maxDist
-
+    local camPos = Camera.CFrame.Position
     for player in pairs(trackedPlayers) do
-        local e = espEntries[player]
-        if not e then e = createESP(player) end
-
+        local e = espEntries[player] or createESP(player)
         local char = player.Character
-        local hrp  = char and char:FindFirstChild("HumanoidRootPart")
-        local hum  = char and char:FindFirstChildOfClass("Humanoid")
-
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
         if not (char and hrp and hum and hum.Health > 0) then
-            hideAllESP(e)
-            continue
+            e.gui.Enabled = false
+        else
+            local dist = (camPos - hrp.Position).Magnitude
+            if dist > flags.maxDist then
+                e.gui.Enabled = false
+            else
+                if e.gui.Adornee ~= hrp then e.gui.Adornee = hrp; e.gui.Parent = hrp end
+                e.gui.Enabled = true
+                local st = espState[player]
+                if not st or st.char ~= char or not st.stamp or (now - st.stamp) > 3 then
+                    local gui = getTitlesGui(char)
+                    st = st or {}
+                    st.char = char; st.stamp = now
+                    st.speciesText = getSpeciesText(char, gui)
+                    st.bloodlineText = getCharacterBloodline(char, gui, player)
+                    st.casting = getCastingFolder(player)
+                    local _, c = getClassColor(char)
+                    st.speciesColor = c or flags.classColor
+                    espState[player] = st
+                end
+                if st.casting and not isAlive(st.casting) then st.casting = getCastingFolder(player) end
+
+                local speciesText = (flags.species and st.speciesText and st.speciesText ~= "") and st.speciesText or nil
+                local nameText = flags.name and player.Name or nil
+                local bloodText = (flags.bloodline and st.bloodlineText and st.bloodlineText ~= "") and st.bloodlineText or nil
+                local spellName = flags.spellESP and getActiveSpellName(st.casting) or nil
+                local isInvis = flags.visESP and isInvisible(st.casting) or false
+                local showHP = flags.healthBar and hum.MaxHealth > 0
+                local distText = flags.distance and (floor(dist) .. " studs") or nil
+
+                e.species.Visible = false; e.name.Visible = false
+                e.bloodline.Visible = false; e.spell.Visible = false
+                e.invis.Visible = false; e.distance.Visible = false
+                e.hpBarBg.Visible = false
+                local y = 0
+                if speciesText then
+                    e.species.Text = speciesText
+                    e.species.TextColor3 = st.speciesColor or flags.classColor
+                    e.species.Position = UDim2.new(0, 0, 0, y)
+                    e.species.Visible = true
+                    y = y + ROW_HEIGHT
+                end
+                if nameText then
+                    e.name.Text = nameText
+                    e.name.Position = UDim2.new(0, 0, 0, y)
+                    e.name.Visible = true
+                    y = y + ROW_HEIGHT
+                end
+                if bloodText then
+                    e.bloodline.Text = bloodText
+                    e.bloodline.Position = UDim2.new(0, 0, 0, y)
+                    e.bloodline.Visible = true
+                    y = y + ROW_HEIGHT
+                end
+                if spellName then
+                    e.spell.Text = spellName                    e.spell.TextColor3 = flags.spellColor
+                    e.spell.Position = UDim2.new(0, 0, 0, y)
+                    e.spell.Visible = true
+                    y = y + ROW_HEIGHT
+                end
+                if isInvis then
+                    e.invis.Text = "Invisible"
+                    e.invis.TextColor3 = Color3.fromRGB(255, 80, 80)
+                    e.invis.Position = UDim2.new(0, 0, 0, y)
+                    e.invis.Visible = true
+                    y = y + ROW_HEIGHT
+                end
+                if showHP then
+                    local pct = clamp(hum.Health / hum.MaxHealth, 0, 1)
+                    e.hpBarFill.Size = UDim2.new(pct, 0, 1, 0)
+                    e.hpBarFill.BackgroundColor3 = Color3.fromRGB(255 * (1 - pct), 255 * pct, 80)
+                    e.hpBarBg.Position = UDim2.new(0.3, 0, 0, y)
+                    e.hpBarBg.Visible = true
+                    y = y + BAR_HEIGHT + BAR_GAP
+                end
+                if distText then
+                    e.distance.Text = distText
+                    e.distance.Position = UDim2.new(0, 0, 0, y)
+                    e.distance.Visible = true
+                    y = y + ROW_HEIGHT
+                end
+                e.gui.Size = UDim2.new(0, 200, 0, math.max(y, 1))
+            end
         end
-
-        local dist = (camPos - hrp.Position).Magnitude
-        if dist > maxDist then
-            hideAllESP(e)
-            continue
-        end
-
-        if e.gui.Adornee ~= hrp then
-            e.gui.Adornee = hrp
-            e.gui.Parent = hrp
-        end
-        e.gui.Enabled = true
-
-        local st = espState[player]
-        if not st or st.char ~= char or not st.guiStamp or (now - st.guiStamp) > 3 then
-            local gui = getTitlesGui(char)
-            st = st or {}
-            st.char = char
-            st.guiStamp = now
-            st.speciesText   = getSpeciesText(char, gui)
-            st.bloodlineText = getCharacterBloodline(char, gui, player)
-            st.casting       = getCastingFolder(player)
-            local _, clsColor = getClassColor(char)
-            st.speciesColor  = clsColor or flags.classColor
-            espState[player] = st
-        end
-
-        if st.casting and not isAlive(st.casting) then
-            st.casting = getCastingFolder(player)
-        end
-
-        local speciesText = (flags.species and st.speciesText and st.speciesText ~= "") and st.speciesText or nil
-        local nameText    = flags.name and player.Name or nil
-        local bloodText   = (flags.bloodline and st.bloodlineText and st.bloodlineText ~= "") and st.bloodlineText or nil
-        local spellName   = flags.spellESP and getActiveSpellName(st.casting) or nil
-        local isInvis     = flags.visESP and isInvisible(st.casting) or false
-        local showHP      = flags.healthBar and hum.MaxHealth > 0
-        local distText    = flags.distance and (floor(dist) .. " studs") or nil
-
-        e.species.Visible = false
-        e.name.Visible = false
-        e.bloodline.Visible = false
-        e.spell.Visible = false
-        e.invis.Visible = false
-        e.distance.Visible = false
-        e.hpBarBg.Visible = false
-
-        local y = 0
-
-        if speciesText then
-            e.species.Text = speciesText
-            e.species.TextColor3 = st.speciesColor or flags.classColor
-            placeRow(e.species, e.frame, y)
-            y += ROW_HEIGHT
-        end
-
-        if nameText then
-            e.name.Text = nameText
-            e.name.TextColor3 = Color3.new(1, 1, 1)
-            placeRow(e.name, e.frame, y)
-            y += ROW_HEIGHT
-        end
-
-        if bloodText then
-            e.bloodline.Text = bloodText
-            e.bloodline.TextColor3 = Color3.fromRGB(80, 160, 255)
-            placeRow(e.bloodline, e.frame, y)
-            y += ROW_HEIGHT
-        end
-
-        if spellName then
-            e.spell.Text = spellName
-            e.spell.TextColor3 = flags.spellColor
-            placeRow(e.spell, e.frame, y)
-            y += ROW_HEIGHT
-        end
-
-        if isInvis then
-            e.invis.Text = "Invisible"
-            e.invis.TextColor3 = Color3.fromRGB(255, 80, 80)
-            placeRow(e.invis, e.frame, y)
-            y += ROW_HEIGHT
-        end
-
-        if showHP then
-            local pct = clamp(hum.Health / hum.MaxHealth, 0, 1)
-            e.hpBarFill.Size = UDim2.new(pct, 0, 1, 0)
-            e.hpBarFill.BackgroundColor3 = Color3.fromRGB(255 * (1 - pct), 255 * pct, 80)
-            e.hpBarBg.Position = UDim2.new(0.3, 0, 0, y)
-            e.hpBarBg.Visible = true
-            y += BAR_HEIGHT + BAR_GAP
-        end
-
-        if distText then
-            e.distance.Text = distText
-            e.distance.TextColor3 = Color3.new(1, 1, 1)
-            placeRow(e.distance, e.frame, y)
-            y += ROW_HEIGHT
-        end
-
-        e.gui.Size = UDim2.new(0, 200, 0, math.max(y, 1))
     end
 end
 
-trackConn(RunService.RenderStepped:Connect(function() pcall(renderESP) end))
+if RunService then
+    trackConn(RunService.RenderStepped:Connect(function() pcall(renderESP) end))
+end
 
 task.spawn(function()
     while true do
         task.wait(2)
         local list = Players:GetPlayers()
         local seen = {}
-        for _, p in ipairs(list) do
-            seen[p] = true
-            if p ~= LocalPlayer then trackPlayer(p) end
-        end
-        for p in pairs(trackedPlayers) do
-            if not seen[p] then untrackPlayer(p) end
-        end
+        for _, p in ipairs(list) do seen[p] = true; if p ~= LocalPlayer then trackPlayer(p) end end
+        for p in pairs(trackedPlayers) do if not seen[p] then untrackPlayer(p) end end
     end
 end)
 
@@ -761,8 +819,7 @@ local function resetAllHitboxes()
         if p ~= LocalPlayer and p.Character then
             local hrp = p.Character:FindFirstChild("HumanoidRootPart")
             if hrp then
-                local orig = originalHRP[p]
-                hrp.Size = orig or Vector3.new(2, 2, 1)
+                hrp.Size = originalHRP[p] or Vector3.new(2, 2, 1)
                 hrp.Transparency = 1
                 hrp.CanCollide = false
             end
@@ -775,13 +832,7 @@ local function updateHitboxVisuals()
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer and p.Character then
             local hrp = p.Character:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                if flags.hitboxShow and flags.hitboxEnabled then
-                    hrp.Transparency = 0.7
-                else
-                    hrp.Transparency = 1
-                end
-            end
+            if hrp then hrp.Transparency = (flags.hitboxShow and flags.hitboxEnabled) and 0.7 or 1 end
         end
     end
 end
@@ -793,8 +844,7 @@ local function applyHitbox(enabled)
             if p ~= LocalPlayer and p.Character then
                 local hrp = p.Character:FindFirstChild("HumanoidRootPart")
                 if hrp then
-                    local orig = originalHRP[p]
-                    hrp.Size = orig or Vector3.new(2, 2, 1)
+                    hrp.Size = originalHRP[p] or Vector3.new(2, 2, 1)
                     hrp.Transparency = 1
                     hrp.CanCollide = false
                 end
@@ -802,7 +852,7 @@ local function applyHitbox(enabled)
         end
         return
     end
-    if hitboxConnection then return end
+    if hitboxConnection or not RunService then return end
     hitboxConnection = RunService.Heartbeat:Connect(function()
         if not flags.hitboxEnabled then return end
         local sz = Vector3.new(flags.hitboxSize, flags.hitboxSize, flags.hitboxSize)
@@ -825,14 +875,14 @@ end
 -- Dj Challenge
 -- ============================================================
 local djConnection
-local function getDJChallengeLabel()
+local function getDJLabel()
     local pg = LocalPlayer:FindFirstChild("PlayerGui")
     if not pg then return nil end
-    for _, name in ipairs({ "DjChallenge", "DJChallenge", "DJ_Challenge", "ChallengeGui", "DJJChallenge" }) do
-        local g = pg:FindFirstChild(name)
+    for _, n in ipairs({ "DjChallenge","DJChallenge","DJ_Challenge","ChallengeGui","DJJChallenge" }) do
+        local g = pg:FindFirstChild(n)
         if g then
-            local lbl = g:FindFirstChild("TextLabel", true)
-            if lbl and lbl:IsA("TextLabel") then return lbl end
+            local l = g:FindFirstChild("TextLabel", true)
+            if l and l:IsA("TextLabel") then return l end
         end
     end
     return nil
@@ -845,23 +895,21 @@ local function startDJChallenge(enabled)
         lastDJText = ""
         return
     end
-    if djConnection then return end
+    if djConnection or not RunService then return end
     djConnection = RunService.RenderStepped:Connect(function()
         if not flags.djChallenge then return end
-        local lbl = getDJChallengeLabel()
-        if not lbl or not lbl.Visible then return end
-        local txt = lbl.Text
-        if #txt == 1 and txt ~= lastDJText then
-            local key = Enum.KeyCode[string.upper(txt)]
-            if key then
-                lastDJText = txt
-                VirtualInputManager:SendKeyEvent(true, key, false, game)
+        local l = getDJLabel()
+        if not l or not l.Visible then return end
+        local t = l.Text
+        if #t == 1 and t ~= lastDJText then
+            local k = Enum.KeyCode[string.upper(t)]
+            if k then
+                lastDJText = t
+                VirtualInputManager:SendKeyEvent(true, k, false, game)
                 task.wait(0.02)
-                VirtualInputManager:SendKeyEvent(false, key, false, game)
+                VirtualInputManager:SendKeyEvent(false, k, false, game)
             end
-        elseif #txt == 0 then
-            lastDJText = ""
-        end
+        elseif #t == 0 then lastDJText = "" end
     end)
 end
 
@@ -876,40 +924,36 @@ local window = Rayfield:CreateWindow({
     configuration = { autoSave = true, autoLoad = true, fileName = "ExampleHub" },
 })
 
--- ============================================================
--- COMBAT TAB
--- ============================================================
+-- Staff toggle callback
+local function onStaffToggleChanged(v)
+    staffNotifyEnabled = v
+    if v then
+        setupStaffJoinWatcher()
+        task.defer(function()
+            if not window then return end
+            local count = 0
+            for _, p in ipairs(Players:GetPlayers()) do
+                if checkAndAddStaff(p) then count = count + 1 end
+            end
+            pcall(function()
+                window:Notify({ title = "Staff Monitor", content = "Watching. In server: " .. count, duration = 5 })
+            end)
+        end)
+    elseif staffOnJoinConnection then
+        pcall(function() staffOnJoinConnection:Disconnect() end)
+        staffOnJoinConnection = nil
+    end
+end
+
+-- ── COMBAT TAB ──────────────────────────────────────────────
 local combatTab = window:CreateTab({ name = "Combat" })
-
 combatTab:CreateSection({ name = "Hitbox" })
-
-combatTab:CreateToggle({
-    name = "Hitbox Expander",
-    flag = "HitboxEnabled",
-    value = flags.hitboxEnabled,
-    callback = function(on)
-        flags.hitboxEnabled = on
-        applyHitbox(on)
-    end,
-})
-
-combatTab:CreateToggle({
-    name = "Show Hitbox",
-    flag = "HitboxShow",
-    value = flags.hitboxShow,
-    callback = function(on)
-        flags.hitboxShow = on
-        updateHitboxVisuals()
-    end,
-})
-
-combatTab:CreateSlider({
-    name = "Hitbox Size",
-    range = { 2, 60 },
-    increment = 1,
-    value = flags.hitboxSize,
-    suffix = " studs",
-    flag = "HitboxSize",
+combatTab:CreateToggle({ name = "Hitbox Expander", flag = "HitboxEnabled", value = flags.hitboxEnabled,
+    callback = function(on) flags.hitboxEnabled = on; applyHitbox(on) end })
+combatTab:CreateToggle({ name = "Show Hitbox", flag = "HitboxShow", value = flags.hitboxShow,
+    callback = function(on) flags.hitboxShow = on; updateHitboxVisuals() end })
+combatTab:CreateSlider({ name = "Hitbox Size", range = { 2, 60 }, increment = 1, value = flags.hitboxSize,
+    suffix = " studs", flag = "HitboxSize",
     callback = function(v)
         flags.hitboxSize = v
         if flags.hitboxEnabled then
@@ -921,225 +965,234 @@ combatTab:CreateSlider({
                 end
             end
         end
-    end,
-})
+    end })
+combatTab:CreateButton({ name = "Reset Hitboxes", callback = function()
+    flags.hitboxEnabled = false; flags.hitboxShow = false; resetAllHitboxes()
+    window:Notify({ title = "Hitboxes", content = "Reset to normal." })
+end })
 
-combatTab:CreateButton({
-    name = "Reset Hitboxes",
-    callback = function()
-        flags.hitboxEnabled = false
-        flags.hitboxShow = false
-        resetAllHitboxes()
-        window:Notify({ title = "Hitboxes", content = "All hitboxes reset to normal." })
-    end,
-})
+combatTab:CreateDivider()
+combatTab:CreateSection({ name = "Target Visualizer" })
+combatTab:CreateToggle({ name = "Show Aim Target", flag = "TargetVisEnabled", value = flags.targetVisEnabled,
+    callback = function(v) flags.targetVisEnabled = v end })
+combatTab:CreateColorPicker({ name = "Target Color", color = flags.targetVisColor, flag = "TargetVisColor",
+    callback = function(c) flags.targetVisColor = c end })
 
 combatTab:CreateDivider()
 combatTab:CreateSection({ name = "CD Removal — Base Kits" })
-
-combatTab:CreateToggle({ name = "Vampire", flag = "VampireCD", value = flags.vampireCD,
-    callback = function(v) flags.vampireCD = v end })
-combatTab:CreateToggle({ name = "Werewolf", flag = "WolfCD", value = flags.wolfCD,
-    callback = function(v) flags.wolfCD = v end })
-combatTab:CreateToggle({ name = "Witch", flag = "WitchCD", value = flags.witchCD,
-    callback = function(v) flags.witchCD = v end })
+combatTab:CreateToggle({ name = "Vampire", flag = "VampireCD", value = flags.vampireCD, callback = function(v) flags.vampireCD = v end })
+combatTab:CreateToggle({ name = "Werewolf", flag = "WolfCD", value = flags.wolfCD, callback = function(v) flags.wolfCD = v end })
+combatTab:CreateToggle({ name = "Witch", flag = "WitchCD", value = flags.witchCD, callback = function(v) flags.witchCD = v end })
 
 combatTab:CreateDivider()
 combatTab:CreateSection({ name = "CD Removal — Coins Kits" })
-
-combatTab:CreateToggle({ name = "Unstable", flag = "UnstableCD", value = flags.unstableCD,
-    callback = function(v) flags.unstableCD = v end })
-combatTab:CreateToggle({ name = "Serum", flag = "SerumCD", value = flags.serumCD,
-    callback = function(v) flags.serumCD = v end })
-combatTab:CreateToggle({ name = "Soulbind", flag = "SoulbindCD", value = flags.soulbindCD,
-    callback = function(v) flags.soulbindCD = v end })
-combatTab:CreateToggle({ name = "Gemini", flag = "GeminiCD", value = flags.geminiCD,
-    callback = function(v) flags.geminiCD = v end })
+combatTab:CreateToggle({ name = "Unstable", flag = "UnstableCD", value = flags.unstableCD, callback = function(v) flags.unstableCD = v end })
+combatTab:CreateToggle({ name = "Serum", flag = "SerumCD", value = flags.serumCD, callback = function(v) flags.serumCD = v end })
+combatTab:CreateToggle({ name = "Soulbind", flag = "SoulbindCD", value = flags.soulbindCD, callback = function(v) flags.soulbindCD = v end })
+combatTab:CreateToggle({ name = "Gemini", flag = "GeminiCD", value = flags.geminiCD, callback = function(v) flags.geminiCD = v end })
 
 combatTab:CreateDivider()
 combatTab:CreateSection({ name = "CD Removal — Gamepass Kits" })
+combatTab:CreateToggle({ name = "Expression", flag = "ExpressionCD", value = flags.expressionCD, callback = function(v) flags.expressionCD = v end })
+combatTab:CreateToggle({ name = "Ancient", flag = "AncientCD", value = flags.ancientCD, callback = function(v) flags.ancientCD = v end })
+combatTab:CreateToggle({ name = "Dark", flag = "DarkCD", value = flags.darkCD, callback = function(v) flags.darkCD = v end })
+combatTab:CreateToggle({ name = "Astral", flag = "AstralCD", value = flags.astralCD, callback = function(v) flags.astralCD = v end })
+combatTab:CreateToggle({ name = "Awakened Soulbind", flag = "AwakenedSoulbindCD", value = flags.awakenedSoulbindCD, callback = function(v) flags.awakenedSoulbindCD = v end })
+combatTab:CreateToggle({ name = "Original Magic", flag = "OriginalMagicCD", value = flags.originalMagicCD, callback = function(v) flags.originalMagicCD = v end })
+combatTab:CreateToggle({ name = "Connective", flag = "ConnectiveCD", value = flags.connectiveCD, callback = function(v) flags.connectiveCD = v end })
 
-combatTab:CreateToggle({ name = "Expression", flag = "ExpressionCD", value = flags.expressionCD,
-    callback = function(v) flags.expressionCD = v end })
-combatTab:CreateToggle({ name = "Ancient", flag = "AncientCD", value = flags.ancientCD,
-    callback = function(v) flags.ancientCD = v end })
-combatTab:CreateToggle({ name = "Dark", flag = "DarkCD", value = flags.darkCD,
-    callback = function(v) flags.darkCD = v end })
-combatTab:CreateToggle({ name = "Astral", flag = "AstralCD", value = flags.astralCD,
-    callback = function(v) flags.astralCD = v end })
-combatTab:CreateToggle({ name = "Awakened Soulbind", flag = "AwakenedSoulbindCD", value = flags.awakenedSoulbindCD,
-    callback = function(v) flags.awakenedSoulbindCD = v end })
-combatTab:CreateToggle({ name = "Original Magic", flag = "OriginalMagicCD", value = flags.originalMagicCD,
-    callback = function(v) flags.originalMagicCD = v end })
-combatTab:CreateToggle({ name = "Connective", flag = "ConnectiveCD", value = flags.connectiveCD,
-    callback = function(v) flags.connectiveCD = v end })
-
--- ============================================================
--- ESP TAB
--- ============================================================
+-- ── ESP TAB ─────────────────────────────────────────────────
 local espTab = window:CreateTab({ name = "ESP" })
 espTab:CreateSection({ name = "Highlights" })
-
-espTab:CreateToggle({ name = "Enable ESP", flag = "EspEnabled", value = flags.espEnabled,
-    callback = function(v) flags.espEnabled = v end })
-espTab:CreateToggle({ name = "Species", flag = "EspSpecies", value = flags.species,
-    callback = function(v) flags.species = v end })
-espTab:CreateToggle({ name = "Username", flag = "EspName", value = flags.name,
-    callback = function(v) flags.name = v end })
-espTab:CreateToggle({ name = "Bloodline", flag = "EspBloodline", value = flags.bloodline,
-    callback = function(v) flags.bloodline = v end })
-espTab:CreateToggle({ name = "Health Bar", flag = "EspHealth", value = flags.healthBar,
-    callback = function(v) flags.healthBar = v end })
-espTab:CreateToggle({ name = "Distance", flag = "EspDistance", value = flags.distance,
-    callback = function(v) flags.distance = v end })
-espTab:CreateToggle({ name = "Active Spells", flag = "EspSpells", value = flags.spellESP,
-    callback = function(v) flags.spellESP = v end })
-espTab:CreateToggle({ name = "Show Invisible", flag = "EspVis", value = flags.visESP,
-    callback = function(v) flags.visESP = v end })
-espTab:CreateToggle({ name = "Hollowed Totem ESP", flag = "TotemESP", value = flags.totemESP,
-    callback = function(v) flags.totemESP = v end })
-
-espTab:CreateSlider({
-    name = "Max Distance", range = { 100, 10000 }, increment = 50,
-    value = flags.maxDist, suffix = " studs", flag = "EspMaxDist",
-    callback = function(v) flags.maxDist = v end,
-})
+espTab:CreateToggle({ name = "Enable ESP", flag = "EspEnabled", value = flags.espEnabled, callback = function(v) flags.espEnabled = v end })
+espTab:CreateToggle({ name = "Species", flag = "EspSpecies", value = flags.species, callback = function(v) flags.species = v end })
+espTab:CreateToggle({ name = "Username", flag = "EspName", value = flags.name, callback = function(v) flags.name = v end })
+espTab:CreateToggle({ name = "Bloodline", flag = "EspBloodline", value = flags.bloodline, callback = function(v) flags.bloodline = v end })
+espTab:CreateToggle({ name = "Health Bar", flag = "EspHealth", value = flags.healthBar, callback = function(v) flags.healthBar = v end })
+espTab:CreateToggle({ name = "Distance", flag = "EspDistance", value = flags.distance, callback = function(v) flags.distance = v end })
+espTab:CreateToggle({ name = "Active Spells", flag = "EspSpells", value = flags.spellESP, callback = function(v) flags.spellESP = v end })
+espTab:CreateToggle({ name = "Show Invisible", flag = "EspVis", value = flags.visESP, callback = function(v) flags.visESP = v end })
+espTab:CreateToggle({ name = "Hollowed Totem ESP", flag = "TotemESP", value = flags.totemESP, callback = function(v) flags.totemESP = v end })
+espTab:CreateSlider({ name = "Max Distance", range = { 100, 10000 }, increment = 50, value = flags.maxDist, suffix = " studs", flag = "EspMaxDist", callback = function(v) flags.maxDist = v end })
 
 espTab:CreateDivider()
 espTab:CreateSection({ name = "Appearance" })
+espTab:CreateColorPicker({ name = "Spell Color", color = flags.spellColor, flag = "EspSpellColor", callback = function(c) flags.spellColor = c end })
+espTab:CreateColorPicker({ name = "Class Color", color = flags.classColor, flag = "EspClassColor", callback = function(c)
+    flags.classColor = c
+    for k in pairs(CLASS_COLORS) do CLASS_COLORS[k] = c end
+end })
+espTab:CreateColorPicker({ name = "Totem Color", color = flags.totemColor, flag = "EspTotemColor", callback = function(c) flags.totemColor = c end })
 
-espTab:CreateColorPicker({
-    name = "Spell Color", color = flags.spellColor, flag = "EspSpellColor",
-    callback = function(c) flags.spellColor = c end,
-})
-espTab:CreateColorPicker({
-    name = "Class Color", color = flags.classColor, flag = "EspClassColor",
-    callback = function(c)
-        flags.classColor = c
-        for k in pairs(CLASS_COLORS) do CLASS_COLORS[k] = c end
-    end,
-})
-espTab:CreateColorPicker({
-    name = "Totem Color", color = flags.totemColor, flag = "EspTotemColor",
-    callback = function(c) flags.totemColor = c end,
-})
-
--- ============================================================
--- ASSISTANCE TAB
--- ============================================================
+-- ── ASSISTANCE TAB ──────────────────────────────────────────
 local assistTab = window:CreateTab({ name = "Assistance" })
-
 assistTab:CreateSection({ name = "Mini-Games" })
-
-assistTab:CreateToggle({
-    name = "Dj Challenge",
-    description = "Auto-presses keys shown in the DJ Challenge mini-game.",
-    flag = "DjChallenge",
-    value = flags.djChallenge,
-    callback = function(on)
-        flags.djChallenge = on
-        startDJChallenge(on)
-    end,
-})
+assistTab:CreateToggle({ name = "Dj Challenge", description = "Auto-presses keys shown in the DJ Challenge mini-game.",
+    flag = "DjChallenge", value = flags.djChallenge,
+    callback = function(on) flags.djChallenge = on; startDJChallenge(on) end })
 
 assistTab:CreateDivider()
 assistTab:CreateSection({ name = "Movement" })
-
-assistTab:CreateToggle({
-    name = "Noclip",
-    flag = "Noclip",
-    value = flags.noclip,
-    callback = function(on)
-        flags.noclip = on
-        applyNoclip(on)
-    end,
-})
+assistTab:CreateToggle({ name = "Noclip", flag = "Noclip", value = flags.noclip,
+    callback = function(on) flags.noclip = on; applyNoclip(on) end })
 
 assistTab:CreateDivider()
 assistTab:CreateSection({ name = "Teleports" })
+assistTab:CreateDropdown({ name = "Location", options = LOCATION_NAMES, value = selectedLocation, flag = "TPSelectedLocation",
+    callback = function(sel) selectedLocation = sel end })
+assistTab:CreateButton({ name = "Teleport to Location", callback = function()
+    local ok, msg = teleportTo(selectedLocation)
+    if ok then window:Notify({ title = "Teleported", content = "Arrived at " .. selectedLocation })
+    else window:Notify({ title = "Teleport Failed", content = msg or "Unknown error" }) end
+end })
 
-assistTab:CreateDropdown({
-    name = "Location",
-    options = LOCATION_NAMES,
-    value = selectedLocation,
-    flag = "TPSelectedLocation",
-    callback = function(sel) selectedLocation = sel end,
+-- ── INFORMATION TAB ─────────────────────────────────────────
+local infoTab = window:CreateTab({ name = "Information" })
+
+infoTab:CreateSection({ name = "Information" })
+
+infoTab:CreateText({
+    name = "Welcome ^.^",
+    text = "This section provides details on which abilities work with CD Removal for each kit."
 })
 
-assistTab:CreateButton({
-    name = "Teleport to Location",
-    callback = function()
-        local ok, msg = teleportTo(selectedLocation)
-        if ok then
-            window:Notify({ title = "Teleported", content = "Arrived at " .. selectedLocation })
-        else
-            window:Notify({ title = "Teleport Failed", content = msg or "Unknown error" })
-        end
-    end,
+infoTab:CreateDivider()
+infoTab:CreateSection({ name = "Base Kits" })
+
+infoTab:CreateText({
+    name = "Vampire",
+    text = "Full no cooldowns — every ability resets."
 })
 
--- ============================================================
--- SETTINGS TAB
--- ============================================================
+infoTab:CreateText({
+    name = "Wolf",
+    text = "Only some work (Clawed Boxing, Gut Kick, Menacing Glare).\nMost of these you need to fully do for the CD to return."
+})
+
+infoTab:CreateText({
+    name = "Witch",
+    text = "Same as wolf, only some abilities work.\nAbilities: Ictus, Aquamalia, Immobilus, Invisique, Ossox, Poena Doloris."
+})
+
+infoTab:CreateDivider()
+infoTab:CreateSection({ name = "Coins Characters" })
+
+infoTab:CreateText({
+    name = "Unstable",
+    text = "Dissulta, QuarantineSpell, Stellabunde, TelekineticScream.\nMost of these you need to fully do for the CD to return."
+})
+
+infoTab:CreateText({
+    name = "Serum",
+    text = "OverheadCrush, SerumBite, StakeThrow, KnuckleDown.\nMost of these you need to fully do for the CD to return."
+})
+
+infoTab:CreateText({
+    name = "Soulbind",
+    text = "Kit has full no cooldowns."
+})
+
+infoTab:CreateText({
+    name = "Gemini",
+    text = "Kit has full no cooldowns."
+})
+
+infoTab:CreateDivider()
+infoTab:CreateSection({ name = "Gamepasses" })
+
+infoTab:CreateText({
+    name = "Expression",
+    text = "Vados, Restraint, PhasmatosAerisCirculo, DoloremInferunt, Sanitatum.\nMost of these you need to fully do for the CD to return."
+})
+
+infoTab:CreateText({
+    name = "Ancient",
+    text = "VineManipulation, SequunturSomnia, MemoryOverload, AhShaLana.\nMost of these you need to fully do for the CD to return."
+})
+
+infoTab:CreateText({
+    name = "Dark",
+    text = "InvidiumCalamactus, DarkBlast, DarkBeam, Autem, Ascendo, AdvancedJapanesePurgingSpell, SiphonHug, MagicRevolve, DarkMagicLocator.\nMost of these you need to fully do for the CD to return."
+})
+
+infoTab:CreateText({
+    name = "Astral",
+    text = "CrowTransformation, BrainMelt, CardiacArrest, PhaseCollapse, SygilSpell, VampirismWeakening, AncestralEradication, ToxinsRemedy.\nMost of these you need to fully do for the CD to return."
+})
+
+infoTab:CreateText({
+    name = "Awakened Soulbind",
+    text = "Kit has full no cooldowns."
+})
+
+infoTab:CreateText({
+    name = "Original Magic",
+    text = "AdvancedPainInfliction, CrowStorm, LinkShatter, ProtectiveSaltCircle, RestrainingChains, VictasConfracta, VampirismReversal, BloodlineChannel.\nMost of these you need to fully do for the CD to return."
+})
+
+infoTab:CreateText({
+    name = "Connective",
+    text = "SoulLink, ToolDestruction, AdvancedAneurysm, Wraithstep, Victas, SanguinemConfractus, FatedPursuit, EnchantedBind, ConnectiveField.\nMost of these you need to fully do for the CD to return."
+})
+
+-- ── SETTINGS TAB ────────────────────────────────────────────
 local settingsTab = window:CreateTab({ name = "Settings" })
-
 settingsTab:CreateSection({ name = "Appearance" })
-settingsTab:CreateDropdown({
-    name = "Theme",
-    options = { "default", "cobalt", "ember", "amethyst", "frost", "rose" },
-    value = "cobalt", flag = "Theme",
-    callback = function(sel) window:ChangeTheme(sel) end,
-})
+settingsTab:CreateDropdown({ name = "Theme", options = { "default", "cobalt", "ember", "amethyst", "frost", "rose" },
+    value = "cobalt", flag = "Theme", callback = function(sel) window:ChangeTheme(sel) end })
 
 settingsTab:CreateDivider()
 settingsTab:CreateSection({ name = "Configuration" })
+settingsTab:CreateButton({ name = "Save Config Now", callback = function() window:Save(); window:Toast({ title = "Saved" }) end })
+settingsTab:CreateButton({ name = "Load Config Now", callback = function() window:Load(); window:Toast({ title = "Loaded" }) end })
 
-settingsTab:CreateButton({
-    name = "Save Config Now",
-    callback = function() window:Save(); window:Toast({ title = "Saved" }) end,
-})
-settingsTab:CreateButton({
-    name = "Load Config Now",
-    callback = function() window:Load(); window:Toast({ title = "Loaded" }) end,
-})
+settingsTab:CreateDivider()
+settingsTab:CreateSection({ name = "Staff Monitor" })
+settingsTab:CreateToggle({ name = "Notify if staff join", flag = "StaffNotify", value = false, callback = onStaffToggleChanged })
+settingsTab:CreateButton({ name = "List Current Staff in Server", callback = function()
+    local entries, staffCount = {}, 0
+    for _, p in ipairs(Players:GetPlayers()) do
+        local ok, rank = pcall(function() return p:GetRankInGroup(STAFF_GROUP_ID) end)
+        if ok and rank >= 2 then
+            local ok2, role = pcall(function() return p:GetRoleInGroup(STAFF_GROUP_ID) end)
+            local isStaff = rank >= STAFF_RANK_THRESHOLD
+            entries[#entries+1] = { displayName = p.DisplayName, username = p.Name, rank = rank, role = ok2 and role or "Unknown", isStaff = isStaff }
+            if isStaff then staffCount = staffCount + 1 end
+        end
+    end
+    if #entries == 0 then window:Notify({ title = "Staff Monitor", content = "No staff in server.", duration = 4 }); return end
+    table.sort(entries, function(a, b) return a.rank > b.rank end)
+    local header = staffCount == 0 and ("Staff: 0 (" .. #entries .. " below-threshold)") or ("Staff: " .. staffCount)
+    local lines = { header, "" }
+    for _, e in ipairs(entries) do
+        lines[#lines+1] = string.format("%s %s — Rank %d: %s", e.isStaff and "★" or "·", e.displayName, e.rank, e.role)
+    end
+    window:Notify({ title = "Staff Monitor", content = table.concat(lines, "\n"), duration = 12 })
+end })
 
 settingsTab:CreateDivider()
 settingsTab:CreateSection({ name = "Danger Zone" })
-
-settingsTab:CreateButton({
-    name = "Eject Script",
-    description = "Stops all features and closes the UI completely.",
+settingsTab:CreateButton({ name = "Eject Script", description = "Stops all features and closes the UI.",
     callback = function()
-        for kitFlag in pairs(CD_KIT_LISTS) do flags[kitFlag] = false end
-
+        for k in pairs(CD_KIT_LISTS) do flags[k] = false end
         flags.djChallenge = false
         if djConnection then djConnection:Disconnect(); djConnection = nil end
-
-        flags.noclip = false
-        applyNoclip(false)
-
-        resetAllHitboxes()
-        flags.hitboxShow = false
-
+        flags.noclip = false; applyNoclip(false)
+        resetAllHitboxes(); flags.hitboxShow = false
+        flags.targetVisEnabled = false; clearTargetVis()
         flags.espEnabled = false
         for player in pairs(espEntries) do destroyESP(player) end
-
         flags.totemESP = false
-        for part in pairs(totemEntries) do
-            removeTotemObjects(part)
-        end
+        for part in pairs(totemEntries) do removeTotemObjects(part) end
         totemEntries = {}
-
+        staffNotifyEnabled = false
+        if staffOnJoinConnection then pcall(function() staffOnJoinConnection:Disconnect() end); staffOnJoinConnection = nil end
         for _, c in ipairs(connections) do pcall(function() c:Disconnect() end) end
         connections = {}
-
         pcall(function() window:Unload() end)
-    end,
-})
+    end })
 
--- ============================================================
--- Load notifications
--- ============================================================
+-- ── Load ────────────────────────────────────────────────────
 task.spawn(function()
     task.wait(1)
     window:Notify({ title = "Auto Bypass", content = "Auto Bypass enabled", duration = 4 })
