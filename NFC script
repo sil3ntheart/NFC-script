@@ -1,8 +1,6 @@
 -- ============================================================
 -- Megs Gui v1.0.0
 -- Combat / ESP / Assistance / Settings / Information
--- + Dj Challenge | Hitbox | Auto Bypass | Teleports | Noclip
--- + Hollowed Totem ESP | CD Removal | Target Visualizer | Staff Monitor
 -- ============================================================
 
 -- ── Services FIRST ─────────────────────────────────────────
@@ -11,11 +9,38 @@ local RunService  = game:GetService("RunService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local PhysicsService = game:GetService("PhysicsService")
 local LocalPlayer = Players.LocalPlayer
 local Camera      = workspace.CurrentCamera
 
 local floor, max, clamp = math.floor, math.max, math.clamp
 local abs, sqrt = math.abs, math.sqrt
+
+-- ── Collision Setup ─────────────
+pcall(function()
+    PhysicsService:RegisterCollisionGroup("ExpandedHitboxes")
+    PhysicsService:RegisterCollisionGroup("LocalPlayerGroup")
+    PhysicsService:CollisionGroupSetCollidable("LocalPlayerGroup", "ExpandedHitboxes", false)
+end)
+
+local function setHitboxGroup(part)
+    pcall(function() part.CollisionGroup = "ExpandedHitboxes" end)
+end
+
+local function setLocalGroup(char)
+    if not char then return end
+    for _, v in ipairs(char:GetDescendants()) do
+        if v:IsA("BasePart") then
+            pcall(function() v.CollisionGroup = "LocalPlayerGroup" end)
+        end
+    end
+end
+
+LocalPlayer.CharacterAdded:Connect(function(char)
+    task.wait(0.5)
+    setLocalGroup(char)
+end)
+if LocalPlayer.Character then setLocalGroup(LocalPlayer.Character) end
 
 -- ── Auto Bypass ─────────────────────────────────────────────
 do
@@ -100,6 +125,8 @@ local flags = {
     espEnabled = false, name = true, bloodline = true, species = true,
     healthBar = true, distance = true, spellESP = true, visESP = true, maxDist = 2000,
     hitboxEnabled = false, hitboxShow = false, hitboxSize = 10,
+    ignoreFriends = true,
+    friendColor = Color3.fromRGB(85, 255, 127),
     djChallenge = false, noclip = false,
     spellColor = Color3.fromRGB(255, 140, 0),
     classColor = Color3.fromRGB(200, 160, 255),
@@ -133,6 +160,41 @@ local function isAlive(inst)
     if not inst then return false end
     local ok, p = pcall(function() return inst.Parent end)
     return ok and p ~= nil
+end
+
+-- ============================================================
+-- Friends System
+-- ============================================================
+local friendCache = {}
+local function refreshFriendsList()
+    friendCache = {}
+    pcall(function()
+        local success, pages = pcall(function() return Players:GetFriendsAsync(LocalPlayer.UserId) end)
+        if success and pages then
+            local cursor = pages
+            while cursor do
+                for _, item in ipairs(cursor:GetCurrentPage()) do
+                    friendCache[item.Id] = true
+                end
+                if cursor.IsFinished then break end
+                local nextOk, nextCursor = pcall(function() return cursor:AdvanceToNextPageAsync() end)
+                if not nextOk then break end
+                cursor = nextCursor
+            end
+        end
+    end)
+end
+refreshFriendsList()
+
+local function isFriend(player)
+    if not flags.ignoreFriends then return false end
+    if friendCache[player.UserId] then return true end
+    local success, result = pcall(function() return player:IsFriendsWith(LocalPlayer.UserId) end)
+    if success and result then
+        friendCache[player.UserId] = true
+        return true
+    end
+    return false
 end
 
 -- ============================================================
@@ -328,59 +390,43 @@ if RunService then
 end
 
 -- ============================================================
--- TARGET VISUALIZER — tiny flat dot above class title
+-- TARGET & DYNAMIC HITBOX FINDER
 -- ============================================================
 local targetDotGui = nil
-local lastTargetVis = 0
-local TARGET_VIS_INTERVAL = 0.1
+local currentAimTarget = nil
+local currentExpandedHRP = nil
+local currentExpandedOrigSize = nil
 
-local function method_cameraCone(camPos, dir)
-    local best, bestDist = nil, math.huge
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer then
-            local char = p.Character
-            local hrp = char and char:FindFirstChild("HumanoidRootPart")
-            local hum = char and char:FindFirstChildOfClass("Humanoid")
-            if char and hrp and hum and hum.Health > 0 then
-                local toChar = hrp.Position - camPos
-                local d = toChar.Magnitude
-                if d > 0 and d < bestDist then
-                    if toChar.Unit:Dot(dir) >= 0.85 then best = char; bestDist = d end
-                end
-            end
-        end
-    end
-    return best
-end
-
-local function method_screenProjection()
-    local vp = Camera.ViewportSize
-    local cx, cy = vp.X / 2, vp.Y / 2
-    local best, bestScore = nil, math.huge
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer then
-            local char = p.Character
-            local hrp = char and char:FindFirstChild("HumanoidRootPart")
-            local hum = char and char:FindFirstChildOfClass("Humanoid")
-            if char and hrp and hum and hum.Health > 0 then
-                local sp, onScreen = Camera:WorldToViewportPoint(hrp.Position)
-                if onScreen and sp.Z > 0 then
-                    local sd = sqrt((sp.X - cx)^2 + (sp.Y - cy)^2)
-                    if sd < 200 and sd < bestScore then best = char; bestScore = sd end
-                end
-            end
-        end
-    end
-    return best
-end
-
-local function method_mouseCone()
+local function method_raycast()
     local mouse = UserInputService:GetMouseLocation()
     local unitRay = Camera:ViewportPointToRay(mouse.X, mouse.Y)
+    
+    local rayParams = RaycastParams.new()
+    rayParams.FilterType = Enum.RaycastFilterType.Exclude
+    rayParams.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
+    
+    local result = workspace:Raycast(unitRay.Origin, unitRay.Direction * 2000, rayParams)
+    if result and result.Instance then
+        local model = result.Instance:FindFirstAncestorOfClass("Model")
+        if model then
+            local player = Players:GetPlayerFromCharacter(model)
+            if player and player ~= LocalPlayer then
+                local hum = model:FindFirstChildOfClass("Humanoid")
+                if hum and hum.Health > 0 and not isFriend(player) then
+                    return model
+                end
+            end
+        end
+    end
+    return nil
+end
+
+local function method_cameraCone()
     local camPos = Camera.CFrame.Position
+    local dir = Camera.CFrame.LookVector
     local best, bestDist = nil, math.huge
     for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer then
+        if p ~= LocalPlayer and not isFriend(p) then
             local char = p.Character
             local hrp = char and char:FindFirstChild("HumanoidRootPart")
             local hum = char and char:FindFirstChildOfClass("Humanoid")
@@ -388,46 +434,10 @@ local function method_mouseCone()
                 local toChar = hrp.Position - camPos
                 local d = toChar.Magnitude
                 if d > 0 and d < bestDist then
-                    if toChar.Unit:Dot(unitRay.Direction) >= 0.85 then best = char; bestDist = d end
+                    if toChar.Unit:Dot(dir) >= 0.90 then 
+                        best = char; bestDist = d 
+                    end
                 end
-            end
-        end
-    end
-    return best
-end
-
-local function method_closestToCenter()
-    local vp = Camera.ViewportSize
-    local cx, cy = vp.X / 2, vp.Y / 2
-    local best, bestScore = nil, 400
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer then
-            local char = p.Character
-            local hrp = char and char:FindFirstChild("HumanoidRootPart")
-            local hum = char and char:FindFirstChildOfClass("Humanoid")
-            if char and hrp and hum and hum.Health > 0 then
-                local sp = Camera:WorldToViewportPoint(hrp.Position)
-                if sp.Z > 0 then
-                    local sd = sqrt((sp.X - cx)^2 + (sp.Y - cy)^2)
-                    if sd < bestScore then best = char; bestScore = sd end
-                end
-            end
-        end
-    end
-    return best
-end
-
-local function method_nearest()
-    local camPos = Camera.CFrame.Position
-    local best, bestDist = nil, 500
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer then
-            local char = p.Character
-            local hrp = char and char:FindFirstChild("HumanoidRootPart")
-            local hum = char and char:FindFirstChildOfClass("Humanoid")
-            if char and hrp and hum and hum.Health > 0 then
-                local d = (camPos - hrp.Position).Magnitude
-                if d < bestDist then best = char; bestDist = d end
             end
         end
     end
@@ -435,68 +445,103 @@ local function method_nearest()
 end
 
 local function findTarget()
-    local camPos = Camera.CFrame.Position
-    local lookVec = Camera.CFrame.LookVector
-    return method_cameraCone(camPos, lookVec) or
-           method_screenProjection() or
-           method_mouseCone() or
-           method_closestToCenter() or
-           method_nearest()
+    local target = method_raycast()
+    if target then return target end
+    return method_cameraCone()
 end
 
 local function clearTargetVis()
     if targetDotGui then pcall(function() targetDotGui:Destroy() end); targetDotGui = nil end
 end
 
-local function updateTargetVisualizer()
-    if not flags.targetVisEnabled then clearTargetVis(); return end
-
-    local char = findTarget()
-    if not char then clearTargetVis(); return end
-
-    local head = char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
-    if not head then clearTargetVis(); return end
-
-    if not targetDotGui or targetDotGui.Parent ~= head then
-        clearTargetVis()
-        
-        -- Create a tiny BillboardGui
-        targetDotGui = Instance.new("BillboardGui")
-        targetDotGui.Name = "TargetDot"
-        targetDotGui.Adornee = head
-        targetDotGui.Size = UDim2.new(0, 10, 0, 10) -- Tiny 10x10 pixel space
-        targetDotGui.StudsOffsetWorldSpace = Vector3.new(0, 6, 0) -- Floats above the class text
-        targetDotGui.AlwaysOnTop = true
-        targetDotGui.LightInfluence = 0
-        targetDotGui.ResetOnSpawn = false
-        
-        -- Create the actual dot
-        local dot = Instance.new("Frame")
-        dot.Name = "Dot"
-        dot.BackgroundColor3 = flags.targetVisColor
-        dot.BorderSizePixel = 0
-        dot.Size = UDim2.new(1, 0, 1, 0)
-        dot.Parent = targetDotGui
-        
-        -- Make it circular
-        local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(1, 0)
-        corner.Parent = dot
-        
-        targetDotGui.Parent = head
+local function resetAimHitbox()
+    if currentExpandedHRP then
+        pcall(function()
+            currentExpandedHRP.Size = currentExpandedOrigSize or Vector3.new(2, 2, 1)
+            currentExpandedHRP.Transparency = 1
+            currentExpandedHRP.CanCollide = false
+            currentExpandedHRP.CollisionGroup = "Default"
+        end)
+        currentExpandedHRP = nil
+        currentExpandedOrigSize = nil
     end
+end
+
+local function updateAimHitbox()
+    if not flags.hitboxEnabled then
+        resetAimHitbox()
+        return
+    end
+
+    local char = currentAimTarget
+    if not char then
+        resetAimHitbox()
+        return
+    end
+
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    local hum = char:FindFirstChildOfClass("Humanoid")
     
-    -- Update color if changed via picker
-    local dot = targetDotGui:FindFirstChild("Dot")
-    if dot then dot.BackgroundColor3 = flags.targetVisColor end
+    local player = Players:GetPlayerFromCharacter(char)
+    if not hrp or not hum or hum.Health <= 0 or (player and isFriend(player)) then
+        resetAimHitbox()
+        return
+    end
+
+    if currentExpandedHRP ~= hrp then
+        resetAimHitbox()
+        currentExpandedHRP = hrp
+        currentExpandedOrigSize = hrp.Size
+    end
+
+    local sz = Vector3.new(flags.hitboxSize, flags.hitboxSize, flags.hitboxSize)
+    hrp.Size = sz
+    hrp.Transparency = flags.hitboxShow and 0.7 or 1
+    hrp.CanCollide = false
+    setHitboxGroup(hrp)
 end
 
 if RunService then
     trackConn(RunService.RenderStepped:Connect(function()
-        local now = tick()
-        if (now - lastTargetVis) < TARGET_VIS_INTERVAL then return end
-        lastTargetVis = now
-        pcall(updateTargetVisualizer)
+        currentAimTarget = findTarget()
+
+        if not flags.targetVisEnabled then 
+            clearTargetVis()
+        elseif currentAimTarget then
+            local head = currentAimTarget:FindFirstChild("Head") or currentAimTarget:FindFirstChild("HumanoidRootPart")
+            if head then
+                if not targetDotGui or targetDotGui.Parent ~= head then
+                    clearTargetVis()
+                    targetDotGui = Instance.new("BillboardGui")
+                    targetDotGui.Name = "TargetDot"
+                    targetDotGui.Adornee = head
+                    targetDotGui.Size = UDim2.new(0, 10, 0, 10)
+                    targetDotGui.StudsOffsetWorldSpace = Vector3.new(0, 6, 0)
+                    targetDotGui.AlwaysOnTop = true
+                    targetDotGui.LightInfluence = 0
+                    targetDotGui.ResetOnSpawn = false
+                    
+                    local dot = Instance.new("Frame")
+                    dot.Name = "Dot"
+                    dot.BackgroundColor3 = flags.targetVisColor
+                    dot.BorderSizePixel = 0
+                    dot.Size = UDim2.new(1, 0, 1, 0)
+                    dot.Parent = targetDotGui
+                    
+                    local corner = Instance.new("UICorner")
+                    corner.CornerRadius = UDim.new(1, 0)
+                    corner.Parent = dot
+                    
+                    targetDotGui.Parent = head
+                end
+                local dot = targetDotGui:FindFirstChild("Dot")
+                if dot then dot.BackgroundColor3 = flags.targetVisColor end
+            end
+        else
+            clearTargetVis()
+        end
+
+        updateAimHitbox()
     end))
 end
 
@@ -729,7 +774,24 @@ local function renderESP()
                 if st.casting and not isAlive(st.casting) then st.casting = getCastingFolder(player) end
 
                 local speciesText = (flags.species and st.speciesText and st.speciesText ~= "") and st.speciesText or nil
-                local nameText = flags.name and player.Name or nil
+                
+                local isFriendPlayer = isFriend(player)
+                local nameRichText = nil
+                local nameColor = Color3.new(1, 1, 1)
+                
+                if flags.name then
+                    local displayName = player.DisplayName
+                    if displayName and displayName ~= player.Name then
+                        nameRichText = string.format('<font size="14">%s</font> <font size="11">(%s)</font>', player.Name, displayName)
+                    else
+                        nameRichText = string.format('<font size="14">%s</font>', player.Name)
+                    end
+                    
+                    if isFriendPlayer then
+                        nameColor = flags.friendColor
+                    end
+                end
+
                 local bloodText = (flags.bloodline and st.bloodlineText and st.bloodlineText ~= "") and st.bloodlineText or nil
                 local spellName = flags.spellESP and getActiveSpellName(st.casting) or nil
                 local isInvis = flags.visESP and isInvisible(st.casting) or false
@@ -748,11 +810,13 @@ local function renderESP()
                     e.species.Visible = true
                     y = y + ROW_HEIGHT
                 end
-                if nameText then
-                    e.name.Text = nameText
+                if nameRichText then
+                    e.name.RichText = true
+                    e.name.Text = nameRichText
+                    e.name.TextColor3 = nameColor
                     e.name.Position = UDim2.new(0, 0, 0, y)
                     e.name.Visible = true
-                    y = y + ROW_HEIGHT
+                    y = y + ROW_HEIGHT + 2
                 end
                 if bloodText then
                     e.bloodline.Text = bloodText
@@ -761,7 +825,8 @@ local function renderESP()
                     y = y + ROW_HEIGHT
                 end
                 if spellName then
-                    e.spell.Text = spellName                    e.spell.TextColor3 = flags.spellColor
+                    e.spell.Text = spellName
+                    e.spell.TextColor3 = flags.spellColor
                     e.spell.Position = UDim2.new(0, 0, 0, y)
                     e.spell.Visible = true
                     y = y + ROW_HEIGHT
@@ -806,70 +871,6 @@ task.spawn(function()
         for p in pairs(trackedPlayers) do if not seen[p] then untrackPlayer(p) end end
     end
 end)
-
--- ============================================================
--- Hitbox Expander
--- ============================================================
-local hitboxConnection
-
-local function resetAllHitboxes()
-    flags.hitboxEnabled = false
-    if hitboxConnection then hitboxConnection:Disconnect(); hitboxConnection = nil end
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer and p.Character then
-            local hrp = p.Character:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                hrp.Size = originalHRP[p] or Vector3.new(2, 2, 1)
-                hrp.Transparency = 1
-                hrp.CanCollide = false
-            end
-        end
-        originalHRP[p] = nil
-    end
-end
-
-local function updateHitboxVisuals()
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer and p.Character then
-            local hrp = p.Character:FindFirstChild("HumanoidRootPart")
-            if hrp then hrp.Transparency = (flags.hitboxShow and flags.hitboxEnabled) and 0.7 or 1 end
-        end
-    end
-end
-
-local function applyHitbox(enabled)
-    if not enabled then
-        if hitboxConnection then hitboxConnection:Disconnect(); hitboxConnection = nil end
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= LocalPlayer and p.Character then
-                local hrp = p.Character:FindFirstChild("HumanoidRootPart")
-                if hrp then
-                    hrp.Size = originalHRP[p] or Vector3.new(2, 2, 1)
-                    hrp.Transparency = 1
-                    hrp.CanCollide = false
-                end
-            end
-        end
-        return
-    end
-    if hitboxConnection or not RunService then return end
-    hitboxConnection = RunService.Heartbeat:Connect(function()
-        if not flags.hitboxEnabled then return end
-        local sz = Vector3.new(flags.hitboxSize, flags.hitboxSize, flags.hitboxSize)
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= LocalPlayer and p.Character then
-                local hrp = p.Character:FindFirstChild("HumanoidRootPart")
-                local hum = p.Character:FindFirstChildOfClass("Humanoid")
-                if hrp and hum and hum.Health > 0 then
-                    if not originalHRP[p] then originalHRP[p] = hrp.Size end
-                    hrp.Size = sz
-                    hrp.Transparency = flags.hitboxShow and 0.7 or 1
-                    hrp.CanCollide = false
-                end
-            end
-        end
-    end)
-end
 
 -- ============================================================
 -- Dj Challenge
@@ -949,27 +950,45 @@ end
 local combatTab = window:CreateTab({ name = "Combat" })
 combatTab:CreateSection({ name = "Hitbox" })
 combatTab:CreateToggle({ name = "Hitbox Expander", flag = "HitboxEnabled", value = flags.hitboxEnabled,
-    callback = function(on) flags.hitboxEnabled = on; applyHitbox(on) end })
+    callback = function(on) flags.hitboxEnabled = on end })
 combatTab:CreateToggle({ name = "Show Hitbox", flag = "HitboxShow", value = flags.hitboxShow,
-    callback = function(on) flags.hitboxShow = on; updateHitboxVisuals() end })
+    callback = function(on) flags.hitboxShow = on end })
 combatTab:CreateSlider({ name = "Hitbox Size", range = { 2, 60 }, increment = 1, value = flags.hitboxSize,
     suffix = " studs", flag = "HitboxSize",
-    callback = function(v)
-        flags.hitboxSize = v
-        if flags.hitboxEnabled then
-            local sz = Vector3.new(v, v, v)
-            for _, p in ipairs(Players:GetPlayers()) do
-                if p ~= LocalPlayer and p.Character then
-                    local hrp = p.Character:FindFirstChild("HumanoidRootPart")
-                    if hrp then hrp.Size = sz end
-                end
-            end
-        end
-    end })
+    callback = function(v) flags.hitboxSize = v end })
 combatTab:CreateButton({ name = "Reset Hitboxes", callback = function()
-    flags.hitboxEnabled = false; flags.hitboxShow = false; resetAllHitboxes()
+    flags.hitboxEnabled = false; flags.hitboxShow = false
+    resetAimHitbox()
     window:Notify({ title = "Hitboxes", content = "Reset to normal." })
 end })
+
+combatTab:CreateDivider()
+combatTab:CreateSection({ name = "Exclude Friends" })
+
+combatTab:CreateToggle({
+    name = "Exclude Friends",
+    flag = "IgnoreFriends",
+    value = flags.ignoreFriends,
+    callback = function(on) 
+        flags.ignoreFriends = on
+        resetAimHitbox()
+    end
+})
+
+combatTab:CreateButton({
+    name = "Refresh Friends List",
+    callback = function()
+        refreshFriendsList()
+        window:Notify({ title = "Friends List", content = "Refreshed successfully." })
+    end
+})
+
+combatTab:CreateColorPicker({
+    name = "Friend Color",
+    color = flags.friendColor,
+    flag = "FriendColor",
+    callback = function(c) flags.friendColor = c end
+})
 
 combatTab:CreateDivider()
 combatTab:CreateSection({ name = "Target Visualizer" })
@@ -1178,7 +1197,7 @@ settingsTab:CreateButton({ name = "Eject Script", description = "Stops all featu
         flags.djChallenge = false
         if djConnection then djConnection:Disconnect(); djConnection = nil end
         flags.noclip = false; applyNoclip(false)
-        resetAllHitboxes(); flags.hitboxShow = false
+        flags.hitboxEnabled = false; resetAimHitbox()
         flags.targetVisEnabled = false; clearTargetVis()
         flags.espEnabled = false
         for player in pairs(espEntries) do destroyESP(player) end
@@ -1197,5 +1216,3 @@ task.spawn(function()
     task.wait(1)
     window:Notify({ title = "Auto Bypass", content = "Auto Bypass enabled", duration = 4 })
 end)
-
-pcall(function() applyHitbox(flags.hitboxEnabled) end)
