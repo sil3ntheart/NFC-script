@@ -467,6 +467,33 @@ local function resetAimHitbox()
     end
 end
 
+-- Checks if a player is being carried by us, or carrying us
+local function isCarryingRelationship(char)
+    local myEntry = getLivingEntry(LocalPlayer)
+    local theirEntry = nil
+    local theirPlayer = Players:GetPlayerFromCharacter(char)
+    if theirPlayer then
+        theirEntry = getLivingEntry(theirPlayer)
+    end
+    
+    if myEntry then
+        local carriedPerson = myEntry:FindFirstChild("CarriedPerson")
+        local carriedBy = myEntry:FindFirstChild("CarriedBy")
+        
+        -- If we are carrying THEM
+        if carriedPerson and carriedPerson.Value == char.Name then return true end
+        -- If THEY are carrying US
+        if carriedBy and carriedBy.Value ~= "" and theirPlayer and carriedBy.Value == theirPlayer.Name then return true end
+    end
+    
+    if theirEntry and theirEntry:FindFirstChild("CarriedPerson") then
+        -- If they are carrying US (alternate check)
+        if theirEntry.CarriedPerson.Value == LocalPlayer.Name then return true end
+    end
+    
+    return false
+end
+
 local function updateAimHitbox()
     if not flags.hitboxEnabled then
         resetAimHitbox()
@@ -483,6 +510,14 @@ local function updateAimHitbox()
     local hum = char:FindFirstChildOfClass("Humanoid")
     
     local player = Players:GetPlayerFromCharacter(char)
+    
+    -- If we are carrying them or they are carrying us, do NOT expand the hitbox.
+    -- This prevents the physics engine from panicking and teleporting us.
+    if isCarryingRelationship(char) then
+        resetAimHitbox()
+        return
+    end
+
     if not hrp or not hum or hum.Health <= 0 or (player and isFriend(player)) then
         resetAimHitbox()
         return
@@ -873,23 +908,35 @@ task.spawn(function()
 end)
 
 -- ============================================================
--- Dj Challenge
+-- Dj Challenge (Fixed based on exact game paths)
 -- ============================================================
 local djConnection
-local function getDJLabel()
-    local pg = LocalPlayer:FindFirstChild("PlayerGui")
-    if not pg then return nil end
-    for _, n in ipairs({ "DjChallenge","DJChallenge","DJ_Challenge","ChallengeGui","DJJChallenge" }) do
-        local g = pg:FindFirstChild(n)
-        if g then
-            local l = g:FindFirstChild("TextLabel", true)
-            if l and l:IsA("TextLabel") then return l end
-        end
+local lastDJText = ""
+
+local function getStruggleTextLabel()
+    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+    if not playerGui then return nil end
+    
+    local effects = playerGui:FindFirstChild("Effects")
+    if not effects then return nil end
+    
+    local system = effects:FindFirstChild("AbilityStruggleSystem") or effects:FindFirstChild("AStruggleSystem")
+    if not system then return nil end
+    
+    local frame = system:FindFirstChild("Frame")
+    if not frame then return nil end
+    
+    return frame:FindFirstChild("TextLabel")
+end
+
+local function getKeyCode(char)
+    char = string.upper(char)
+    if char:match("^[A-Z]$") then
+        return Enum.KeyCode[char]
     end
     return nil
 end
 
-local lastDJText = ""
 local function startDJChallenge(enabled)
     if not enabled then
         if djConnection then djConnection:Disconnect(); djConnection = nil end
@@ -897,20 +944,30 @@ local function startDJChallenge(enabled)
         return
     end
     if djConnection or not RunService then return end
+    
     djConnection = RunService.RenderStepped:Connect(function()
         if not flags.djChallenge then return end
-        local l = getDJLabel()
-        if not l or not l.Visible then return end
-        local t = l.Text
-        if #t == 1 and t ~= lastDJText then
-            local k = Enum.KeyCode[string.upper(t)]
-            if k then
-                lastDJText = t
-                VirtualInputManager:SendKeyEvent(true, k, false, game)
-                task.wait(0.02)
-                VirtualInputManager:SendKeyEvent(false, k, false, game)
+        
+        local textLabel = getStruggleTextLabel()
+        
+        if textLabel and textLabel.Visible then
+            local currentText = textLabel.Text
+            
+            if #currentText == 1 and currentText ~= lastDJText then
+                local keyCode = getKeyCode(currentText)
+                
+                if keyCode then
+                    lastDJText = currentText
+                    
+                    -- Simulate key press
+                    VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
+                    task.wait(0.02)
+                    VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
+                end
+            elseif #currentText == 0 then
+                lastDJText = ""
             end
-        elseif #t == 0 then lastDJText = "" end
+        end
     end)
 end
 
