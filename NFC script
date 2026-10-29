@@ -1,6 +1,7 @@
 -- ============================================================
 -- Megs Gui v1.0.0
 -- Combat / ESP / Assistance / Settings / Information
+-- + Reworked Assistance Tab
 -- ============================================================
 
 -- ── Services FIRST ─────────────────────────────────────────
@@ -128,6 +129,10 @@ local flags = {
     ignoreFriends = true,
     friendColor = Color3.fromRGB(85, 255, 127),
     djChallenge = false, noclip = false,
+    autoHerb = false,
+    autoHerbKey = Enum.KeyCode.F,
+    rageMode = false,
+    rageTarget = "",
     spellColor = Color3.fromRGB(255, 140, 0),
     classColor = Color3.fromRGB(200, 160, 255),
     totemColor = Color3.fromRGB(0, 140, 255),
@@ -160,6 +165,26 @@ local function isAlive(inst)
     if not inst then return false end
     local ok, p = pcall(function() return inst.Parent end)
     return ok and p ~= nil
+end
+
+-- ============================================================
+-- LivingThings helpers
+-- ============================================================
+local livingThingsCache = nil
+local function getLivingThings()
+    local lt = livingThingsCache
+    if lt and isAlive(lt) then return lt end
+    lt = workspace:FindFirstChild("LivingThings")
+    livingThingsCache = lt
+    return lt
+end
+local function getLivingEntry(player)
+    local lt = getLivingThings()
+    return lt and lt:FindFirstChild(player.Name)
+end
+local function getCastingFolder(player)
+    local entry = getLivingEntry(player)
+    return entry and entry:FindFirstChild("CastingSpells")
 end
 
 -- ============================================================
@@ -198,23 +223,98 @@ local function isFriend(player)
 end
 
 -- ============================================================
--- LivingThings helpers
+-- Rage Mode Helpers
 -- ============================================================
-local livingThingsCache = nil
-local function getLivingThings()
-    local lt = livingThingsCache
-    if lt and isAlive(lt) then return lt end
-    lt = workspace:FindFirstChild("LivingThings")
-    livingThingsCache = lt
-    return lt
+local SpellHandler = ReplicatedStorage:FindFirstChild("SpellEvent") and ReplicatedStorage.SpellEvent:FindFirstChild("SpellHandler")
+local rageConnection = nil
+
+local function getPlayerList()
+    local list = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and not isFriend(p) then
+            if p.DisplayName and p.DisplayName ~= p.Name then
+                table.insert(list, p.Name .. " (" .. p.DisplayName .. ")")
+            else
+                table.insert(list, p.Name)
+            end
+        end
+    end
+    if #list == 0 then table.insert(list, "None") end
+    return list
 end
-local function getLivingEntry(player)
-    local lt = getLivingThings()
-    return lt and lt:FindFirstChild(player.Name)
+
+local function getCurrentAbility()
+    local myEntry = getLivingEntry(LocalPlayer)
+    if not myEntry then return nil end
+
+    local equipped = myEntry:FindFirstChild("AbilityEquipped")
+    if equipped and equipped:IsA("StringValue") and equipped.Value ~= "" then
+        return equipped.Value
+    end
+
+    local casting = myEntry:FindFirstChild("CastingSpells")
+    if casting then
+        for _, v in ipairs(casting:GetChildren()) do
+            if v:IsA("BoolValue") and v.Value == true then
+                return v.Name
+            end
+        end
+    end
+    return nil
 end
-local function getCastingFolder(player)
-    local entry = getLivingEntry(player)
-    return entry and entry:FindFirstChild("CastingSpells")
+
+-- Single Target Rage Mode
+local function startRageMode(enabled)
+    if not enabled then
+        if rageConnection then rageConnection:Disconnect(); rageConnection = nil end
+        return
+    end
+    
+    if rageConnection or not RunService then return end
+    
+    rageConnection = RunService.Heartbeat:Connect(function()
+        if not flags.rageMode or flags.rageTarget == "" or flags.rageTarget == "None" then return end
+        
+        local targetName = string.match(flags.rageTarget, "^([^%s]+)")
+        if not targetName then return end
+        
+        local targetModel = workspace:FindFirstChild("LivingThings") and workspace.LivingThings:FindFirstChild(targetName)
+        if not targetModel then return end
+        
+        local ability = getCurrentAbility()
+        
+        if ability and SpellHandler then
+            pcall(function()
+                SpellHandler:FireServer(targetModel, ability, nil)
+            end)
+        end
+    end)
+end
+
+-- ============================================================
+-- Auto Herb Keybind
+-- ============================================================
+local herbConnection = nil
+
+local function startAutoHerb(enabled)
+    if not enabled then
+        if herbConnection then herbConnection:Disconnect(); herbConnection = nil end
+        return
+    end
+    
+    if herbConnection or not RunService then return end
+    
+    herbConnection = RunService.Heartbeat:Connect(function()
+        if not flags.autoHerb then return end
+        
+        if UserInputService:IsKeyDown(flags.autoHerbKey) then
+            if SpellHandler then
+                pcall(function()
+                    SpellHandler:FireServer(nil, "HealingHerb")
+                end)
+            end
+        end
+    end)
 end
 
 -- ============================================================
@@ -480,14 +580,11 @@ local function isCarryingRelationship(char)
         local carriedPerson = myEntry:FindFirstChild("CarriedPerson")
         local carriedBy = myEntry:FindFirstChild("CarriedBy")
         
-        -- If we are carrying THEM
         if carriedPerson and carriedPerson.Value == char.Name then return true end
-        -- If THEY are carrying US
         if carriedBy and carriedBy.Value ~= "" and theirPlayer and carriedBy.Value == theirPlayer.Name then return true end
     end
     
     if theirEntry and theirEntry:FindFirstChild("CarriedPerson") then
-        -- If they are carrying US (alternate check)
         if theirEntry.CarriedPerson.Value == LocalPlayer.Name then return true end
     end
     
@@ -511,8 +608,6 @@ local function updateAimHitbox()
     
     local player = Players:GetPlayerFromCharacter(char)
     
-    -- If we are carrying them or they are carrying us, do NOT expand the hitbox.
-    -- This prevents the physics engine from panicking and teleporting us.
     if isCarryingRelationship(char) then
         resetAimHitbox()
         return
@@ -908,7 +1003,7 @@ task.spawn(function()
 end)
 
 -- ============================================================
--- Dj Challenge (Fixed based on exact game paths)
+-- Dj Challenge
 -- ============================================================
 local djConnection
 local lastDJText = ""
@@ -959,7 +1054,6 @@ local function startDJChallenge(enabled)
                 if keyCode then
                     lastDJText = currentText
                     
-                    -- Simulate key press
                     VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
                     task.wait(0.02)
                     VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
@@ -1018,6 +1112,36 @@ combatTab:CreateButton({ name = "Reset Hitboxes", callback = function()
     resetAimHitbox()
     window:Notify({ title = "Hitboxes", content = "Reset to normal." })
 end })
+
+combatTab:CreateDivider()
+combatTab:CreateSection({ name = "Rage Mode" })
+
+combatTab:CreateToggle({ 
+    name = "Enable Rage Mode", 
+    flag = "RageMode", 
+    value = flags.rageMode,
+    callback = function(on) 
+        flags.rageMode = on
+        startRageMode(on) 
+    end 
+})
+
+local rageDropdown = combatTab:CreateDropdown({
+    name = "Target Player",
+    options = getPlayerList(),
+    value = flags.rageTarget,
+    flag = "RageTarget",
+    callback = function(sel) flags.rageTarget = sel end
+})
+
+combatTab:CreateButton({
+    name = "Refresh Player List",
+    callback = function()
+        local newList = getPlayerList()
+        rageDropdown:Refresh(newList)
+        window:Notify({ title = "Rage Mode", content = "Player list refreshed." })
+    end
+})
 
 combatTab:CreateDivider()
 combatTab:CreateSection({ name = "Exclude Friends" })
@@ -1102,15 +1226,32 @@ espTab:CreateColorPicker({ name = "Totem Color", color = flags.totemColor, flag 
 
 -- ── ASSISTANCE TAB ──────────────────────────────────────────
 local assistTab = window:CreateTab({ name = "Assistance" })
+
+-- REORDERED ASSISTANCE TAB
+assistTab:CreateSection({ name = "Auto Herb" })
+
+assistTab:CreateToggle({ 
+    name = "Enable Auto Herb", 
+    flag = "AutoHerb", 
+    value = flags.autoHerb,
+    callback = function(on) 
+        flags.autoHerb = on
+        startAutoHerb(on) 
+    end 
+})
+
+assistTab:CreateKeybind({
+    name = "Auto Herb Key",
+    value = flags.autoHerbKey,
+    flag = "AutoHerbKey",
+    callback = function(key) flags.autoHerbKey = key end
+})
+
+assistTab:CreateDivider()
 assistTab:CreateSection({ name = "Mini-Games" })
 assistTab:CreateToggle({ name = "Dj Challenge", description = "Auto-presses keys shown in the DJ Challenge mini-game.",
     flag = "DjChallenge", value = flags.djChallenge,
     callback = function(on) flags.djChallenge = on; startDJChallenge(on) end })
-
-assistTab:CreateDivider()
-assistTab:CreateSection({ name = "Movement" })
-assistTab:CreateToggle({ name = "Noclip", flag = "Noclip", value = flags.noclip,
-    callback = function(on) flags.noclip = on; applyNoclip(on) end })
 
 assistTab:CreateDivider()
 assistTab:CreateSection({ name = "Teleports" })
@@ -1121,6 +1262,11 @@ assistTab:CreateButton({ name = "Teleport to Location", callback = function()
     if ok then window:Notify({ title = "Teleported", content = "Arrived at " .. selectedLocation })
     else window:Notify({ title = "Teleport Failed", content = msg or "Unknown error" }) end
 end })
+
+assistTab:CreateDivider()
+assistTab:CreateSection({ name = "Movement" })
+assistTab:CreateToggle({ name = "Noclip", flag = "Noclip", value = flags.noclip,
+    callback = function(on) flags.noclip = on; applyNoclip(on) end })
 
 -- ── INFORMATION TAB ─────────────────────────────────────────
 local infoTab = window:CreateTab({ name = "Information" })
@@ -1254,7 +1400,9 @@ settingsTab:CreateButton({ name = "Eject Script", description = "Stops all featu
         flags.djChallenge = false
         if djConnection then djConnection:Disconnect(); djConnection = nil end
         flags.noclip = false; applyNoclip(false)
+        flags.autoHerb = false; startAutoHerb(false)
         flags.hitboxEnabled = false; resetAimHitbox()
+        flags.rageMode = false; startRageMode(false)
         flags.targetVisEnabled = false; clearTargetVis()
         flags.espEnabled = false
         for player in pairs(espEntries) do destroyESP(player) end
