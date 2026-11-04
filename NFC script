@@ -143,6 +143,7 @@ local flags = {
     unstableCD = false, serumCD = false, soulbindCD = false, geminiCD = false,
     expressionCD = false, ancientCD = false, darkCD = false, astralCD = false,
     awakenedSoulbindCD = false, originalMagicCD = false, connectiveCD = false,
+    speckCD = false, -- [ADDED] Speck CD flag
 }
 
 local CLASS_COLORS = {
@@ -384,6 +385,7 @@ local CD_KIT_LISTS = {
     awakenedSoulbindCD = { "SonicScream","Soulbinding","TelekineticCombo","HarvestChaos","LightningStrikeSpell","MassTelekineticSnap","MemoryWipingSpell","NemoUnusAnimabusCarnem" },
     originalMagicCD = { "AdvancedPainInfliction","CrowStorm","LinkShatter","ProtectiveSaltCircle","RestrainingChains","VictasConfracta","VampirismReversal","BloodlineChannel" },
     connectiveCD = { "SoulLink","ToolDestruction","AdvancedAneurysm","Wraithstep","Victas","SanguinemConfractus","FatedPursuit","EnchantedBind","ConnectiveField" },
+    speckCD = { "MolecularImmobilization", "FireOverload", "CombustionSpells" }, -- [ADDED] Speck kit abilities
 }
 
 local function fireCDList(list)
@@ -1200,6 +1202,11 @@ combatTab:CreateToggle({ name = "Astral", flag = "AstralCD", value = flags.astra
 combatTab:CreateToggle({ name = "Awakened Soulbind", flag = "AwakenedSoulbindCD", value = flags.awakenedSoulbindCD, callback = function(v) flags.awakenedSoulbindCD = v end })
 combatTab:CreateToggle({ name = "Original Magic", flag = "OriginalMagicCD", value = flags.originalMagicCD, callback = function(v) flags.originalMagicCD = v end })
 combatTab:CreateToggle({ name = "Connective", flag = "ConnectiveCD", value = flags.connectiveCD, callback = function(v) flags.connectiveCD = v end })
+
+-- [ADDED] CD Removal — Speck section
+combatTab:CreateDivider()
+combatTab:CreateSection({ name = "CD Removal — Speck" })
+combatTab:CreateToggle({ name = "Speck", flag = "SpeckCD", value = flags.speckCD, callback = function(v) flags.speckCD = v end })
 
 -- ── ESP TAB ─────────────────────────────────────────────────
 local espTab = window:CreateTab({ name = "ESP" })
