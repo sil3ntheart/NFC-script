@@ -1,7 +1,7 @@
 -- ============================================================
--- Megs Gui v1.0.1
+-- Megs Gui v1.0.2
 -- Combat / ESP / Assistance / Settings / Information
--- + Speck CD + Bug fixes
+-- + Speck CD + Regent CD + Bug fixes
 -- ============================================================
 
 -- ── Services FIRST ─────────────────────────────────────────
@@ -143,7 +143,7 @@ local flags = {
     totemESP = false,
     targetVisEnabled = false, targetVisColor = Color3.fromRGB(255, 60, 60),
     staffNotify = false,
-    vampireCD = false, wolfCD = false, witchCD = false,
+    vampireCD = false, wolfCD = false, witchCD = false, regentCD = false, -- [ADDED] regentCD
     unstableCD = false, serumCD = false, soulbindCD = false, geminiCD = false,
     expressionCD = false, ancientCD = false, darkCD = false, astralCD = false,
     awakenedSoulbindCD = false, originalMagicCD = false, connectiveCD = false,
@@ -380,6 +380,7 @@ local CD_KIT_LISTS = {
     vampireCD = { "NeckSnap","WristSnap","BloodHeal","Feed","SpineBreak","EyeGouge","ThroatRip","BlinkAttack","MistMaw","MistCharge","SkyfallReaver","VampireStep" },
     wolfCD = { "ClawedBoxing","GutKick","MenacingGlare","NeckSnap" },
     witchCD = { "Ictus","Aquamalia","Immobilus","Invisique","Ossox","PoenaDoloris" },
+    regentCD = { "Obsidio","AntecesPoenam","AncestralPainInfliction","Vitalis" }, -- [ADDED] Regent kit abilities
     unstableCD = { "Dissulta","QuarantineSpell","Stellabunde","TelekineticScream" },
     serumCD = { "OverheadCrush","SerumBite","StakeThrow","KnuckleDown" },
     soulbindCD = { "TelekineticWristSnap","SanguisSicco","SanguisDucatur","OmnisDormit","HarvestOverflow","NemoUnusAnimabusCarnem" },
@@ -1080,7 +1081,7 @@ end
 -- [FIX] Config filename changed from default "ExampleHub" to "MegsGui"
 local window = Rayfield:CreateWindow({
     name = "Megs Gui",
-    subtitle = "v1.0.1",
+    subtitle = "v1.0.2",
     sidebarLayout = true,
     theme = "cobalt",
     configuration = { autoSave = true, autoLoad = true, fileName = "MegsGui" },
@@ -1193,6 +1194,7 @@ combatTab:CreateSection({ name = "CD Removal — Base Kits" })
 combatTab:CreateToggle({ name = "Vampire", flag = "VampireCD", value = flags.vampireCD, callback = function(v) flags.vampireCD = v end })
 combatTab:CreateToggle({ name = "Werewolf", flag = "WolfCD", value = flags.wolfCD, callback = function(v) flags.wolfCD = v end })
 combatTab:CreateToggle({ name = "Witch", flag = "WitchCD", value = flags.witchCD, callback = function(v) flags.witchCD = v end })
+combatTab:CreateToggle({ name = "Regent", flag = "RegentCD", value = flags.regentCD, callback = function(v) flags.regentCD = v end }) -- [ADDED]
 
 combatTab:CreateDivider()
 combatTab:CreateSection({ name = "CD Removal — Coins Kits" })
@@ -1307,6 +1309,11 @@ infoTab:CreateText({
 infoTab:CreateText({
     name = "Witch",
     text = "Same as wolf, only some abilities work.\nAbilities: Ictus, Aquamalia, Immobilus, Invisique, Ossox, Poena Doloris."
+})
+
+infoTab:CreateText({
+    name = "Regent",
+    text = "Obsidio, AntecesPoenam, AncestralPainInfliction, Vitalis.\nMost of these you need to fully do for the CD to return."
 })
 
 infoTab:CreateDivider()
