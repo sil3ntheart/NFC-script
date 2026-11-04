@@ -1,7 +1,7 @@
 -- ============================================================
--- Megs Gui v1.0.9
+-- Megs Gui v1.2.0
 -- Combat / ESP / Assistance / Settings / Information
--- Fixed: Teleport to Player selection · + bug fixes & improvements
+-- + Auto Carry Struggle (5-20s delay) + All Bug Fixes
 -- ============================================================
 
 -- ── Services FIRST ─────────────────────────────────────────
@@ -11,6 +11,8 @@ local VirtualInputManager = game:GetService("VirtualInputManager")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local PhysicsService = game:GetService("PhysicsService")
+local HttpService = game:GetService("HttpService")
+local TeleportService = game:GetService("TeleportService")
 local LocalPlayer = Players.LocalPlayer
 local Camera      = workspace.CurrentCamera
 
@@ -90,7 +92,7 @@ do
 end
 
 -- ============================================================
--- Adonis Bypass
+-- Adonis Bypass (silent — no notifications)
 -- ============================================================
 local Adonis = { Name = "Adonis", Game = "*" }
 local AdonisHooks = {}
@@ -173,18 +175,12 @@ Adonis.Succeeded = false
 
 if AdonisSupported then
     Adonis.Detected = Adonis.Detect()
-    print("[Adonis Bypass] Adonis detected: " .. (Adonis.Detected and "Yes" or "No"))
     if Adonis.Detected then
         if Adonis.Bypass() then
             Adonis.Disabled = true
             Adonis.Succeeded = true
-            print("[Adonis Bypass] Bypassed successfully.")
-        else
-            warn("[Adonis Bypass] Bypass failed.")
         end
     end
-else
-    print("[Adonis Bypass] Adonis detected: No (not supported in this game)")
 end
 
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/gen2"))()
@@ -226,7 +222,7 @@ local flags = {
     hitboxEnabled = false, hitboxShow = false, hitboxSize = 10,
     ignoreFriends = true,
     friendColor = Color3.fromRGB(85, 255, 127),
-    djChallenge = false, noclip = false,
+    djChallenge = false, autoCarryStruggle = false, autoCarryStruggleDelay = 5, noclip = false,
     autoHerb = false,
     autoHerbKey = Enum.KeyCode.F,
     rageMode = false,
@@ -240,7 +236,7 @@ local flags = {
     vampireCD = false, wolfCD = false, witchCD = false, regentCD = false,
     unstableCD = false, serumCD = false, soulbindCD = false, geminiCD = false,
     starGuardianCD = false, starNemesisCD = false,
-    expressionCD = false, ancientCD = false, astralCD = false,
+    expressionCD = false, ancientCD = false, darkCD = false, astralCD = false,
     awakenedSoulbindCD = false, originalMagicCD = false, connectiveCD = false,
     relentlessHunterCD = false, hopeCD = false, phoenixCD = false, kingOfHellCD = false,
     speckCD = false,
@@ -359,7 +355,6 @@ local function getAllPlayerList()
     return list
 end
 
--- [FIX] Resolve a dropdown string like "Name (DisplayName)" to a Player object
 local function resolvePlayerFromString(s)
     if not s or s == "None" or s == "" then return nil end
     local name = string.match(s, "^([^%s]+)")
@@ -403,7 +398,7 @@ local function startRageMode(enabled)
 end
 
 -- ============================================================
--- Auto Herb Keybind
+-- Auto Herb
 -- ============================================================
 local herbConnection = nil
 local function startAutoHerb(enabled)
@@ -423,7 +418,130 @@ local function startAutoHerb(enabled)
 end
 
 -- ============================================================
--- Staff Monitor state
+-- Auto Carry Struggle (Delay 5-20s before starting)
+-- ============================================================
+local autoCarryStruggleConnections = {}
+local autoCarryIsProcessing = false
+
+local function startAutoCarryStruggle(enabled)
+    for _, c in ipairs(autoCarryStruggleConnections) do pcall(function() c:Disconnect() end) end
+    table.clear(autoCarryStruggleConnections)
+    if not enabled then return end
+
+    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+    if not playerGui then return end
+    local effects = playerGui:FindFirstChild("Effects")
+    if not effects then return end
+    local struggleSystem = effects:FindFirstChild("AStruggleSystem")
+    if not struggleSystem then return end
+    local frame = struggleSystem:FindFirstChild("Frame")
+    if not frame then return end
+    local textLabel = frame:FindFirstChild("TextLabel")
+    if not textLabel then return end
+
+    local function pressKey(keyName)
+        if not flags.autoCarryStruggle then return end
+        if autoCarryIsProcessing then return end
+        autoCarryIsProcessing = true
+        
+        -- [FIX] Wrapped in parentheses to prevent string.upper argument mismatch
+        local cleanedKey = string.upper((string.gsub(keyName or "", "%s+", "")))
+        local success, keyCode = pcall(function() return Enum.KeyCode[cleanedKey] end)
+
+        if success and keyCode then
+            if struggleSystem.Enabled then
+                -- Send key instantly (no delay between presses)
+                VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
+                task.wait(0.05)
+                VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
+            end
+        end
+        autoCarryIsProcessing = false
+    end
+
+    table.insert(autoCarryStruggleConnections, struggleSystem:GetPropertyChangedSignal("Enabled"):Connect(function()
+        if flags.autoCarryStruggle and struggleSystem.Enabled then 
+            -- Delay before starting
+            task.delay(flags.autoCarryStruggleDelay, function()
+                if flags.autoCarryStruggle and struggleSystem.Enabled then
+                    pressKey(textLabel.Text) 
+                end
+            end)
+        end
+    end))
+
+    table.insert(autoCarryStruggleConnections, textLabel:GetPropertyChangedSignal("Text"):Connect(function()
+        if flags.autoCarryStruggle and struggleSystem.Enabled then pressKey(textLabel.Text) end
+    end))
+
+    if struggleSystem.Enabled then 
+        task.delay(flags.autoCarryStruggleDelay, function()
+            if flags.autoCarryStruggle and struggleSystem.Enabled then
+                pressKey(textLabel.Text) 
+            end
+        end)
+    end
+end
+
+-- ============================================================
+-- Remote View
+-- ============================================================
+local remoteViewConnection = nil
+local remoteViewTarget = nil
+
+local function startRemoteView(player)
+    remoteViewTarget = player
+    if remoteViewConnection then return end
+    remoteViewConnection = RunService.RenderStepped:Connect(function()
+        if not remoteViewTarget then return end
+        local char = remoteViewTarget.Character
+        local head = char and char:FindFirstChild("Head")
+        if not head then return end
+        local camPos = head.Position + (head.CFrame.LookVector * -8) + Vector3.new(0, 3, 0)
+        Camera.CameraType = Enum.CameraType.Scriptable
+        Camera.CFrame = CFrame.lookAt(camPos, head.Position)
+    end)
+end
+
+local function stopRemoteView()
+    remoteViewTarget = nil
+    if remoteViewConnection then
+        remoteViewConnection:Disconnect()
+        remoteViewConnection = nil
+    end
+    pcall(function()
+        Camera.CameraType = Enum.CameraType.Custom
+        Camera.CameraSubject = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") or nil
+    end)
+end
+
+-- ============================================================
+-- Server Hop / Rejoin
+-- ============================================================
+local function rejoinServer()
+    pcall(function()
+        TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
+    end)
+end
+
+local function serverHop()
+    task.spawn(function()
+        pcall(function()
+            local url = ("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100"):format(game.PlaceId)
+            local response = HttpService:JSONDecode(game:HttpGet(url))
+            for _, server in ipairs(response.data or {}) do
+                if server.playing < server.maxPlayers and server.id ~= game.JobId then
+                    pcall(function() TeleportService:TeleportToPlaceInstance(game.PlaceId, server.id, LocalPlayer) end)
+                    return
+                end
+            end
+            pcall(function() TeleportService:Teleport(game.PlaceId, LocalPlayer) end)
+        end)
+    end)
+end
+
+-- ============================================================
+-- Staff Monitor
 -- ============================================================
 local STAFF_GROUP_ID = 35585413
 local STAFF_RANK_THRESHOLD = 5
@@ -444,20 +562,6 @@ local function checkAndAddStaff(player)
     local info = getStaffInfo(player)
     if info then currentStaff[player] = info; return info end
     return nil
-end
-
-local function setupStaffJoinWatcher()
-    if staffOnJoinConnection then pcall(function() staffOnJoinConnection:Disconnect() end) end
-    staffOnJoinConnection = Players.PlayerAdded:Connect(function(player)
-        task.wait(1.5)
-        local info = checkAndAddStaff(player)
-        if info and staffNotifyEnabled and window then
-            pcall(function()
-                window:Notify({ title = "Staff Joined", content = (player.DisplayName or player.Name) .. " (" .. info.role .. ")", duration = 8 })
-            end)
-        end
-    end)
-    trackConn(staffOnJoinConnection)
 end
 
 -- ============================================================
@@ -613,7 +717,7 @@ if RunService then
 end
 
 -- ============================================================
--- TARGET & DYNAMIC HITBOX FINDER
+-- TARGET & DYNAMIC HITBOX
 -- ============================================================
 local targetDotGui = nil
 local currentAimTarget = nil
@@ -1133,16 +1237,28 @@ end
 -- ============================================================
 local window = Rayfield:CreateWindow({
     name = "Megs Gui",
-    subtitle = "v1.0.9",
+    subtitle = "v1.2.0",
     sidebarLayout = true,
     theme = "cobalt",
     configuration = { autoSave = true, autoLoad = true, fileName = "MegsGui" },
 })
 
+-- [FIX] Moved below window to prevent global shadow warning
 local function onStaffToggleChanged(v)
     staffNotifyEnabled = v
     if v then
-        setupStaffJoinWatcher()
+        if staffOnJoinConnection then pcall(function() staffOnJoinConnection:Disconnect() end) end
+        staffOnJoinConnection = Players.PlayerAdded:Connect(function(player)
+            task.wait(1.5)
+            local info = checkAndAddStaff(player)
+            if info and staffNotifyEnabled and window then
+                pcall(function()
+                    window:Notify({ title = "Staff Joined", content = (player.DisplayName or player.Name) .. " (" .. info.role .. ")", duration = 8 })
+                end)
+            end
+        end)
+        trackConn(staffOnJoinConnection)
+        
         task.defer(function()
             if not window then return end
             local count = 0
@@ -1274,68 +1390,43 @@ espTab:CreateColorPicker({ name = "Totem Color", color = flags.totemColor, flag 
 -- ── ASSISTANCE TAB ──────────────────────────────────────────
 local assistTab = window:CreateTab({ name = "Assistance" })
 
--- [FIX] Teleport to Player — store selection in a local var via callback,
--- do NOT read the dropdown's .Value at button time (it can be stale/nil).
-assistTab:CreateSection({ name = "Teleport to Player" })
+assistTab:CreateSection({ name = "Teleports" })
 local tpSelectedPlayerName = nil
 local tpPlayerDropdown = assistTab:CreateDropdown({
-    name = "Select Player",
+    name = "Player",
     options = getAllPlayerList(),
     value = nil,
     flag = "TPSelectedPlayer",
-    callback = function(sel)
-        tpSelectedPlayerName = sel -- [FIX] reliable selection storage
-    end
+    callback = function(sel) tpSelectedPlayerName = sel end
 })
-
-assistTab:CreateButton({
-    name = "Teleport to Selected Player",
-    callback = function()
-        local target = resolvePlayerFromString(tpSelectedPlayerName)
-        if not target then
-            window:Notify({ title = "Teleport", content = "No player selected (or they left).", duration = 4 })
-            return
-        end
-        local char = target.Character
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-        local myChar = LocalPlayer.Character
-        local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
-        if not hrp then
-            window:Notify({ title = "Teleport Failed", content = target.Name .. " has no HRP (respawning?).", duration = 4 })
-            return
-        end
-        if not myHRP then
-            window:Notify({ title = "Teleport Failed", content = "You are not spawned.", duration = 4 })
-            return
-        end
-        myHRP.CFrame = hrp.CFrame + Vector3.new(0, 0, 3)
-        window:Notify({ title = "Teleported", content = "Teleported to " .. target.Name, duration = 4 })
+assistTab:CreateButton({ name = "Teleport to Player", callback = function()
+    local target = resolvePlayerFromString(tpSelectedPlayerName)
+    if not target then
+        window:Notify({ title = "Teleport", content = "No player selected (or they left).", duration = 4 })
+        return
     end
-})
-
-assistTab:CreateButton({
-    name = "Refresh Player List",
-    callback = function()
-        tpPlayerDropdown:Refresh(getAllPlayerList())
-        window:Notify({ title = "Teleport", content = "Player list refreshed.", duration = 4 })
+    local char = target.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    local myChar = LocalPlayer.Character
+    local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    if not hrp then
+        window:Notify({ title = "Teleport Failed", content = target.Name .. " has no HRP.", duration = 4 })
+        return
     end
-})
+    if not myHRP then
+        window:Notify({ title = "Teleport Failed", content = "You are not spawned.", duration = 4 })
+        return
+    end
+    myHRP.CFrame = hrp.CFrame + Vector3.new(0, 0, 3)
+    window:Notify({ title = "Teleported", content = "Teleported to " .. target.Name, duration = 4 })
+end })
+assistTab:CreateButton({ name = "Refresh Player List", callback = function()
+    tpPlayerDropdown:Refresh(getAllPlayerList())
+    window:Notify({ title = "Teleport", content = "Player list refreshed.", duration = 4 })
+end })
 
 assistTab:CreateDivider()
-assistTab:CreateSection({ name = "Auto Herb" })
-assistTab:CreateToggle({ name = "Enable Auto Herb", flag = "AutoHerb", value = flags.autoHerb,
-    callback = function(on) flags.autoHerb = on; startAutoHerb(on) end })
-assistTab:CreateKeybind({ name = "Auto Herb Key", value = flags.autoHerbKey, flag = "AutoHerbKey",
-    callback = function(key) flags.autoHerbKey = key end })
-
-assistTab:CreateDivider()
-assistTab:CreateSection({ name = "Mini-Games" })
-assistTab:CreateToggle({ name = "Dj Challenge", description = "Auto-presses keys shown in the DJ Challenge mini-game.",
-    flag = "DjChallenge", value = flags.djChallenge,
-    callback = function(on) flags.djChallenge = on; startDJChallenge(on) end })
-
-assistTab:CreateDivider()
-assistTab:CreateSection({ name = "Teleports" })
+assistTab:CreateSection({ name = "Location Teleports" })
 assistTab:CreateDropdown({ name = "Location", options = LOCATION_NAMES, value = selectedLocation, flag = "TPSelectedLocation",
     callback = function(sel) selectedLocation = sel end })
 assistTab:CreateButton({ name = "Teleport to Location", callback = function()
@@ -1343,6 +1434,58 @@ assistTab:CreateButton({ name = "Teleport to Location", callback = function()
     if ok then window:Notify({ title = "Teleported", content = "Arrived at " .. selectedLocation })
     else window:Notify({ title = "Teleport Failed", content = msg or "Unknown error" }) end
 end })
+
+assistTab:CreateDivider()
+assistTab:CreateSection({ name = "Remote View" })
+local rvSelectedPlayerName = nil
+local rvPlayerDropdown = assistTab:CreateDropdown({
+    name = "Player",
+    options = getAllPlayerList(),
+    value = nil,
+    flag = "RVSelectedPlayer",
+    callback = function(sel) rvSelectedPlayerName = sel end
+})
+assistTab:CreateButton({ name = "Start Remote View", callback = function()
+    local target = resolvePlayerFromString(rvSelectedPlayerName)
+    if not target then
+        window:Notify({ title = "Remote View", content = "No player selected (or they left).", duration = 4 })
+        return
+    end
+    local char = target.Character
+    local head = char and char:FindFirstChild("Head")
+    if not head then
+        window:Notify({ title = "Remote View Failed", content = target.Name .. " has no Head.", duration = 4 })
+        return
+    end
+    startRemoteView(target)
+    window:Notify({ title = "Remote View", content = "Viewing " .. target.Name, duration = 4 })
+end })
+assistTab:CreateButton({ name = "Stop Remote View", callback = function()
+    stopRemoteView()
+    window:Notify({ title = "Remote View", content = "Stopped.", duration = 4 })
+end })
+assistTab:CreateButton({ name = "Refresh Player List", callback = function()
+    rvPlayerDropdown:Refresh(getAllPlayerList())
+    window:Notify({ title = "Remote View", content = "Player list refreshed.", duration = 4 })
+end })
+
+assistTab:CreateDivider()
+assistTab:CreateSection({ name = "Automation" })
+assistTab:CreateToggle({ name = "Auto Herb", flag = "AutoHerb", value = flags.autoHerb,
+    callback = function(on) flags.autoHerb = on; startAutoHerb(on) end })
+assistTab:CreateKeybind({ name = "Auto Herb Key", value = flags.autoHerbKey, flag = "AutoHerbKey",
+    callback = function(key) flags.autoHerbKey = key end })
+
+assistTab:CreateToggle({ name = "Auto Carry Struggle", flag = "AutoCarryStruggle", value = flags.autoCarryStruggle,
+    callback = function(on) flags.autoCarryStruggle = on; startAutoCarryStruggle(on) end })
+
+-- [UPDATED] Range is now 5 to 20 seconds
+assistTab:CreateSlider({ name = "Auto Carry Struggle Delay", range = { 5, 20 }, increment = 1, value = 5,
+    suffix = "s", flag = "AutoCarryStruggleDelay",
+    callback = function(v) flags.autoCarryStruggleDelay = v end })
+
+assistTab:CreateToggle({ name = "Dj Challenge", flag = "DjChallenge", value = flags.djChallenge,
+    callback = function(on) flags.djChallenge = on; startDJChallenge(on) end })
 
 assistTab:CreateDivider()
 assistTab:CreateSection({ name = "Movement" })
@@ -1397,6 +1540,19 @@ settingsTab:CreateButton({ name = "Save Config Now", callback = function() windo
 settingsTab:CreateButton({ name = "Load Config Now", callback = function() window:Load(); window:Toast({ title = "Loaded" }) end })
 
 settingsTab:CreateDivider()
+settingsTab:CreateSection({ name = "Server" })
+settingsTab:CreateButton({ name = "Rejoin Server", callback = function()
+    window:Notify({ title = "Server", content = "Rejoining...", duration = 3 })
+    task.wait(0.5)
+    rejoinServer()
+end })
+settingsTab:CreateButton({ name = "Server Hop", callback = function()
+    window:Notify({ title = "Server", content = "Hopping to new server...", duration = 3 })
+    task.wait(0.5)
+    serverHop()
+end })
+
+settingsTab:CreateDivider()
 settingsTab:CreateSection({ name = "Staff Monitor" })
 settingsTab:CreateToggle({ name = "Notify if staff join", flag = "StaffNotify", value = false, callback = onStaffToggleChanged })
 settingsTab:CreateButton({ name = "List Current Staff in Server", callback = function()
@@ -1422,31 +1578,32 @@ end })
 
 settingsTab:CreateDivider()
 settingsTab:CreateSection({ name = "Danger Zone" })
-settingsTab:CreateButton({ name = "Eject Script", description = "Stops all features and closes the UI.",
-    callback = function()
-        flags._cdLoopActive = false
-        for k in pairs(CD_KIT_LISTS) do flags[k] = false end
-        flags.djChallenge = false
-        if djConnection then djConnection:Disconnect(); djConnection = nil end
-        flags.noclip = false; applyNoclip(false)
-        flags.autoHerb = false; startAutoHerb(false)
-        flags.hitboxEnabled = false; resetAimHitbox()
-        flags.rageMode = false; startRageMode(false)
-        flags.targetVisEnabled = false; clearTargetVis()
-        flags.espEnabled = false
-        for player in pairs(espEntries) do destroyESP(player) end
-        flags.totemESP = false
-        for part in pairs(totemEntries) do removeTotemObjects(part) end
-        totemEntries = {}
-        staffNotifyEnabled = false
-        currentStaff = {}
-        if staffOnJoinConnection then pcall(function() staffOnJoinConnection:Disconnect() end); staffOnJoinConnection = nil end
-        for _, c in ipairs(connections) do pcall(function()
-            if typeof(c) == "RBXScriptConnection" then c:Disconnect() end
-        end) end
-        connections = {}
-        pcall(function() window:Unload() end)
-    end })
+settingsTab:CreateButton({ name = "Eject Script", callback = function()
+    flags._cdLoopActive = false
+    for k in pairs(CD_KIT_LISTS) do flags[k] = false end
+    flags.djChallenge = false
+    if djConnection then djConnection:Disconnect(); djConnection = nil end
+    flags.noclip = false; applyNoclip(false)
+    flags.autoHerb = false; startAutoHerb(false)
+    flags.autoCarryStruggle = false; startAutoCarryStruggle(false)
+    flags.hitboxEnabled = false; resetAimHitbox()
+    flags.rageMode = false; startRageMode(false)
+    flags.targetVisEnabled = false; clearTargetVis()
+    flags.espEnabled = false
+    for player in pairs(espEntries) do destroyESP(player) end
+    flags.totemESP = false
+    for part in pairs(totemEntries) do removeTotemObjects(part) end
+    totemEntries = {}
+    staffNotifyEnabled = false
+    currentStaff = {}
+    stopRemoteView()
+    if staffOnJoinConnection then pcall(function() staffOnJoinConnection:Disconnect() end); staffOnJoinConnection = nil end
+    for _, c in ipairs(connections) do pcall(function()
+        if typeof(c) == "RBXScriptConnection" then c:Disconnect() end
+    end) end
+    connections = {}
+    pcall(function() window:Unload() end)
+end })
 
 -- ── Load ────────────────────────────────────────────────────
 task.spawn(function()
@@ -1455,10 +1612,5 @@ task.spawn(function()
         window:Notify({ title = "Auto Bypass", content = "Auto Bypass enabled", duration = 4 })
     else
         window:Notify({ title = "Auto Bypass", content = "No anti-cheat found (or unsupported)", duration = 4 })
-    end
-    if Adonis.Succeeded then
-        window:Notify({ title = "Adonis Bypass", content = "Adonis bypassed successfully.", duration = 4 })
-    elseif Adonis.Detected then
-        window:Notify({ title = "Adonis Bypass", content = "Adonis detected but bypass failed.", duration = 5 })
     end
 end)
