@@ -1,7 +1,7 @@
 -- ============================================================
--- Megs Gui v1.0.0
+-- Megs Gui v1.0.1
 -- Combat / ESP / Assistance / Settings / Information
--- + Reworked Assistance Tab
+-- + Speck CD + Bug fixes
 -- ============================================================
 
 -- ── Services FIRST ─────────────────────────────────────────
@@ -14,24 +14,24 @@ local PhysicsService = game:GetService("PhysicsService")
 local LocalPlayer = Players.LocalPlayer
 local Camera      = workspace.CurrentCamera
 
-local floor, max, clamp = math.floor, math.max, math.clamp
-local abs, sqrt = math.abs, math.sqrt
+local floor, clamp = math.floor, math.clamp
 
--- ── Collision Setup ─────────────
-pcall(function()
-    PhysicsService:RegisterCollisionGroup("ExpandedHitboxes")
-    PhysicsService:RegisterCollisionGroup("LocalPlayerGroup")
-    PhysicsService:CollisionGroupSetCollidable("LocalPlayerGroup", "ExpandedHitboxes", false)
-end)
+-- [FIX] Split pcall blocks so re-execution doesn't abort CollisionGroupSetCollidable
+pcall(function() PhysicsService:RegisterCollisionGroup("ExpandedHitboxes") end)
+pcall(function() PhysicsService:RegisterCollisionGroup("LocalPlayerGroup") end)
+pcall(function() PhysicsService:CollisionGroupSetCollidable("LocalPlayerGroup", "ExpandedHitboxes", false) end)
+pcall(function() PhysicsService:CollisionGroupSetCollidable("LocalPlayerGroup", "LocalPlayerGroup", false) end)
 
 local function setHitboxGroup(part)
     pcall(function() part.CollisionGroup = "ExpandedHitboxes" end)
 end
 
+-- [FIX] Levitation — never move HumanoidRootPart into the custom group.
+-- The HRP stays in Default so the game's ground detection keeps working.
 local function setLocalGroup(char)
     if not char then return end
     for _, v in ipairs(char:GetDescendants()) do
-        if v:IsA("BasePart") then
+        if v:IsA("BasePart") and v.Name ~= "HumanoidRootPart" then
             pcall(function() v.CollisionGroup = "LocalPlayerGroup" end)
         end
     end
@@ -44,6 +44,8 @@ end)
 if LocalPlayer.Character then setLocalGroup(LocalPlayer.Character) end
 
 -- ── Auto Bypass ─────────────────────────────────────────────
+-- [FIX] Track whether bypass actually succeeded so the startup notify is accurate
+local bypassSucceeded = false
 do
     pcall(function()
         local remote = ReplicatedStorage:FindFirstChild("AntiCheatRemote")
@@ -72,6 +74,7 @@ do
         if not flag then return end
         if type(hookfunction) == "function" then
             pcall(hookfunction, flag, function() end)
+            bypassSucceeded = true
             return
         end
         task.spawn(function()
@@ -86,6 +89,7 @@ do
                 task.wait(1)
             end
         end)
+        bypassSucceeded = true
     end)
 end
 
@@ -143,7 +147,9 @@ local flags = {
     unstableCD = false, serumCD = false, soulbindCD = false, geminiCD = false,
     expressionCD = false, ancientCD = false, darkCD = false, astralCD = false,
     awakenedSoulbindCD = false, originalMagicCD = false, connectiveCD = false,
-    speckCD = false, -- [ADDED] Speck CD flag
+    speckCD = false,
+    -- [FIX] internal loop control flags (not exposed to UI)
+    _cdLoopActive = true,
 }
 
 local CLASS_COLORS = {
@@ -158,7 +164,6 @@ local CLASS_PRIORITY = {
     "Vampire","Werewolf","Heretic","Siphoner","Witch","Phoenix","Psychic","HellSpirit","Human",
 }
 
-local originalHRP = {}
 local connections = {}
 local function trackConn(c) table.insert(connections, c); return c end
 
@@ -279,8 +284,9 @@ local function startRageMode(enabled)
         local targetName = string.match(flags.rageTarget, "^([^%s]+)")
         if not targetName then return end
         
+        -- [FIX] Guard stale target model before firing
         local targetModel = workspace:FindFirstChild("LivingThings") and workspace.LivingThings:FindFirstChild(targetName)
-        if not targetModel then return end
+        if not targetModel or not targetModel.Parent then return end
         
         local ability = getCurrentAbility()
         
@@ -385,7 +391,7 @@ local CD_KIT_LISTS = {
     awakenedSoulbindCD = { "SonicScream","Soulbinding","TelekineticCombo","HarvestChaos","LightningStrikeSpell","MassTelekineticSnap","MemoryWipingSpell","NemoUnusAnimabusCarnem" },
     originalMagicCD = { "AdvancedPainInfliction","CrowStorm","LinkShatter","ProtectiveSaltCircle","RestrainingChains","VictasConfracta","VampirismReversal","BloodlineChannel" },
     connectiveCD = { "SoulLink","ToolDestruction","AdvancedAneurysm","Wraithstep","Victas","SanguinemConfractus","FatedPursuit","EnchantedBind","ConnectiveField" },
-    speckCD = { "MolecularImmobilization", "FireOverload", "CombustionSpells", "Level1", "Level2", "Level3" }, -- [ADDED] Speck kit abilities
+    speckCD = { "MolecularImmobilization", "FireOverload", "CombustionSpells", "Level1", "Level2", "Level3" },
 }
 
 local function fireCDList(list)
@@ -405,15 +411,17 @@ local function fireCDList(list)
     end
 end
 
+-- [FIX] CD loop now respects _cdLoopActive so Eject actually stops it
+-- (task.spawn returns a thread, not a connection, so trackConn couldn't cancel it)
 if CooldownOffEvent then
-    trackConn(task.spawn(function()
-        while true do
+    task.spawn(function()
+        while flags._cdLoopActive do
             task.wait(0.05)
             for kitFlag, list in pairs(CD_KIT_LISTS) do
                 if flags[kitFlag] then pcall(fireCDList, list) end
             end
         end
-    end))
+    end)
 end
 
 -- ============================================================
@@ -569,7 +577,6 @@ local function resetAimHitbox()
     end
 end
 
--- Checks if a player is being carried by us, or carrying us
 local function isCarryingRelationship(char)
     local myEntry = getLivingEntry(LocalPlayer)
     local theirEntry = nil
@@ -1070,12 +1077,13 @@ end
 -- ============================================================
 -- Window
 -- ============================================================
+-- [FIX] Config filename changed from default "ExampleHub" to "MegsGui"
 local window = Rayfield:CreateWindow({
     name = "Megs Gui",
-    subtitle = "v1.0.0",
+    subtitle = "v1.0.1",
     sidebarLayout = true,
     theme = "cobalt",
-    configuration = { autoSave = true, autoLoad = true, fileName = "ExampleHub" },
+    configuration = { autoSave = true, autoLoad = true, fileName = "MegsGui" },
 })
 
 -- Staff toggle callback
@@ -1203,7 +1211,6 @@ combatTab:CreateToggle({ name = "Awakened Soulbind", flag = "AwakenedSoulbindCD"
 combatTab:CreateToggle({ name = "Original Magic", flag = "OriginalMagicCD", value = flags.originalMagicCD, callback = function(v) flags.originalMagicCD = v end })
 combatTab:CreateToggle({ name = "Connective", flag = "ConnectiveCD", value = flags.connectiveCD, callback = function(v) flags.connectiveCD = v end })
 
--- [ADDED] CD Removal — Speck section
 combatTab:CreateDivider()
 combatTab:CreateSection({ name = "CD Removal — Speck" })
 combatTab:CreateToggle({ name = "Speck", flag = "SpeckCD", value = flags.speckCD, callback = function(v) flags.speckCD = v end })
@@ -1234,7 +1241,6 @@ espTab:CreateColorPicker({ name = "Totem Color", color = flags.totemColor, flag 
 -- ── ASSISTANCE TAB ──────────────────────────────────────────
 local assistTab = window:CreateTab({ name = "Assistance" })
 
--- REORDERED ASSISTANCE TAB
 assistTab:CreateSection({ name = "Auto Herb" })
 
 assistTab:CreateToggle({ 
@@ -1364,6 +1370,11 @@ infoTab:CreateText({
     text = "SoulLink, ToolDestruction, AdvancedAneurysm, Wraithstep, Victas, SanguinemConfractus, FatedPursuit, EnchantedBind, ConnectiveField.\nMost of these you need to fully do for the CD to return."
 })
 
+infoTab:CreateText({
+    name = "Speck",
+    text = "MolecularImmobilization, FireOverload, CombustionSpells, Level1, Level2, Level3.\nMost of these you need to fully do for the CD to return."
+})
+
 -- ── SETTINGS TAB ────────────────────────────────────────────
 local settingsTab = window:CreateTab({ name = "Settings" })
 settingsTab:CreateSection({ name = "Appearance" })
@@ -1403,6 +1414,8 @@ settingsTab:CreateDivider()
 settingsTab:CreateSection({ name = "Danger Zone" })
 settingsTab:CreateButton({ name = "Eject Script", description = "Stops all features and closes the UI.",
     callback = function()
+        -- [FIX] Stop the CD loop via its control flag
+        flags._cdLoopActive = false
         for k in pairs(CD_KIT_LISTS) do flags[k] = false end
         flags.djChallenge = false
         if djConnection then djConnection:Disconnect(); djConnection = nil end
@@ -1416,9 +1429,13 @@ settingsTab:CreateButton({ name = "Eject Script", description = "Stops all featu
         flags.totemESP = false
         for part in pairs(totemEntries) do removeTotemObjects(part) end
         totemEntries = {}
+        -- [FIX] Clear staff state on eject
         staffNotifyEnabled = false
+        currentStaff = {}
         if staffOnJoinConnection then pcall(function() staffOnJoinConnection:Disconnect() end); staffOnJoinConnection = nil end
-        for _, c in ipairs(connections) do pcall(function() c:Disconnect() end) end
+        for _, c in ipairs(connections) do pcall(function()
+            if typeof(c) == "RBXScriptConnection" then c:Disconnect() end
+        end) end
         connections = {}
         pcall(function() window:Unload() end)
     end })
@@ -1426,5 +1443,10 @@ settingsTab:CreateButton({ name = "Eject Script", description = "Stops all featu
 -- ── Load ────────────────────────────────────────────────────
 task.spawn(function()
     task.wait(1)
-    window:Notify({ title = "Auto Bypass", content = "Auto Bypass enabled", duration = 4 })
+    -- [FIX] Only say bypass enabled if it actually succeeded
+    if bypassSucceeded then
+        window:Notify({ title = "Auto Bypass", content = "Auto Bypass enabled", duration = 4 })
+    else
+        window:Notify({ title = "Auto Bypass", content = "No anti-cheat found (or unsupported)", duration = 4 })
+    end
 end)
