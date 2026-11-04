@@ -1,7 +1,7 @@
 -- ============================================================
--- Megs Gui v1.0.2
+-- Megs Gui v1.0.9
 -- Combat / ESP / Assistance / Settings / Information
--- + Speck CD + Regent CD + Bug fixes
+-- Fixed: Teleport to Player selection · + bug fixes & improvements
 -- ============================================================
 
 -- ── Services FIRST ─────────────────────────────────────────
@@ -16,7 +16,6 @@ local Camera      = workspace.CurrentCamera
 
 local floor, clamp = math.floor, math.clamp
 
--- [FIX] Split pcall blocks so re-execution doesn't abort CollisionGroupSetCollidable
 pcall(function() PhysicsService:RegisterCollisionGroup("ExpandedHitboxes") end)
 pcall(function() PhysicsService:RegisterCollisionGroup("LocalPlayerGroup") end)
 pcall(function() PhysicsService:CollisionGroupSetCollidable("LocalPlayerGroup", "ExpandedHitboxes", false) end)
@@ -26,8 +25,6 @@ local function setHitboxGroup(part)
     pcall(function() part.CollisionGroup = "ExpandedHitboxes" end)
 end
 
--- [FIX] Levitation — never move HumanoidRootPart into the custom group.
--- The HRP stays in Default so the game's ground detection keeps working.
 local function setLocalGroup(char)
     if not char then return end
     for _, v in ipairs(char:GetDescendants()) do
@@ -44,7 +41,6 @@ end)
 if LocalPlayer.Character then setLocalGroup(LocalPlayer.Character) end
 
 -- ── Auto Bypass ─────────────────────────────────────────────
--- [FIX] Track whether bypass actually succeeded so the startup notify is accurate
 local bypassSucceeded = false
 do
     pcall(function()
@@ -91,6 +87,104 @@ do
         end)
         bypassSucceeded = true
     end)
+end
+
+-- ============================================================
+-- Adonis Bypass
+-- ============================================================
+local Adonis = { Name = "Adonis", Game = "*" }
+local AdonisHooks = {}
+Adonis.Hooks = AdonisHooks
+
+local function AdonisHookFunction(Original, Replacement)
+    if newcclosure and islclosure and islclosure(Replacement) then
+        Replacement = newcclosure(Replacement)
+    end
+    assert(typeof(hookfunction) == "function", "hookfunction is not supported by this executor")
+    return hookfunction(Original, Replacement)
+end
+
+local AdonisAnticheatThreads = {}
+
+function Adonis.Detect()
+    if not getreg or not getgc or not isfunctionhooked then return false end
+    table.clear(AdonisAnticheatThreads)
+    local AdonisDetected = false
+    for _, thread in getreg() do
+        if typeof(thread) ~= "thread" then continue end
+        local Source = debug.info(thread, 1, "s")
+        if Source and (Source:match(".Core.Anti") or Source:match(".Plugins.Anti_Cheat")) then
+            AdonisDetected = true
+            table.insert(AdonisAnticheatThreads, thread)
+        end
+    end
+    return AdonisDetected
+end
+
+function Adonis.Bypass()
+    for _, thread in AdonisAnticheatThreads do
+        pcall(coroutine.close, thread)
+    end
+    local AdonisTables = {}
+    if filtergc then
+        local ContendorAdonisTables = filtergc("table", { Keys = { "Detected", "RLocked" } }, false)
+        for _, AdonisTable in ContendorAdonisTables do
+            if typeof(rawget(AdonisTable, "Detected")) ~= "function" then continue end
+            table.insert(AdonisTables, AdonisTable)
+        end
+    else
+        for _, Table in getgc(true) do
+            if typeof(Table) ~= "table" then continue end
+            local IsAdonisOrigin = typeof(rawget(Table, "Detected")) == "function" and rawget(Table, "RLocked")
+            if not IsAdonisOrigin then continue end
+            table.insert(AdonisTables, Table)
+        end
+    end
+    for _, AdonisTable in AdonisTables do
+        for _, DetectionFunc in AdonisTable do
+            if typeof(DetectionFunc) ~= "function" or isfunctionhooked(DetectionFunc) then continue end
+            local Success, Original = pcall(AdonisHookFunction, DetectionFunc, function(action, info, nocrash)
+                coroutine.yield()
+                return task.wait(9e9)
+            end)
+            if Success then AdonisHooks[DetectionFunc] = Original end
+        end
+    end
+    return true
+end
+
+function Adonis.Restore()
+    for Function, Original in AdonisHooks do
+        if restorefunction then pcall(restorefunction, Function)
+        else pcall(AdonisHookFunction, Function, Original) end
+        AdonisHooks[Function] = nil
+    end
+end
+
+local AdonisSupported = (
+    if typeof(Adonis.Game) == "table"
+        then (table.find(Adonis.Game, game.PlaceId) or table.find(Adonis.Game, tostring(game.PlaceId))) ~= nil
+        else (Adonis.Game == "*" or tostring(Adonis.Game) == tostring(game.PlaceId))
+)
+
+Adonis.Disabled = false
+Adonis.Detected = false
+Adonis.Succeeded = false
+
+if AdonisSupported then
+    Adonis.Detected = Adonis.Detect()
+    print("[Adonis Bypass] Adonis detected: " .. (Adonis.Detected and "Yes" or "No"))
+    if Adonis.Detected then
+        if Adonis.Bypass() then
+            Adonis.Disabled = true
+            Adonis.Succeeded = true
+            print("[Adonis Bypass] Bypassed successfully.")
+        else
+            warn("[Adonis Bypass] Bypass failed.")
+        end
+    end
+else
+    print("[Adonis Bypass] Adonis detected: No (not supported in this game)")
 end
 
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/gen2"))()
@@ -143,12 +237,13 @@ local flags = {
     totemESP = false,
     targetVisEnabled = false, targetVisColor = Color3.fromRGB(255, 60, 60),
     staffNotify = false,
-    vampireCD = false, wolfCD = false, witchCD = false, regentCD = false, -- [ADDED] regentCD
+    vampireCD = false, wolfCD = false, witchCD = false, regentCD = false,
     unstableCD = false, serumCD = false, soulbindCD = false, geminiCD = false,
-    expressionCD = false, ancientCD = false, darkCD = false, astralCD = false,
+    starGuardianCD = false, starNemesisCD = false,
+    expressionCD = false, ancientCD = false, astralCD = false,
     awakenedSoulbindCD = false, originalMagicCD = false, connectiveCD = false,
+    relentlessHunterCD = false, hopeCD = false, phoenixCD = false, kingOfHellCD = false,
     speckCD = false,
-    -- [FIX] internal loop control flags (not exposed to UI)
     _cdLoopActive = true,
 }
 
@@ -249,51 +344,60 @@ local function getPlayerList()
     return list
 end
 
+local function getAllPlayerList()
+    local list = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then
+            if p.DisplayName and p.DisplayName ~= p.Name then
+                table.insert(list, p.Name .. " (" .. p.DisplayName .. ")")
+            else
+                table.insert(list, p.Name)
+            end
+        end
+    end
+    if #list == 0 then table.insert(list, "None") end
+    return list
+end
+
+-- [FIX] Resolve a dropdown string like "Name (DisplayName)" to a Player object
+local function resolvePlayerFromString(s)
+    if not s or s == "None" or s == "" then return nil end
+    local name = string.match(s, "^([^%s]+)")
+    if not name then return nil end
+    return Players:FindFirstChild(name)
+end
+
 local function getCurrentAbility()
     local myEntry = getLivingEntry(LocalPlayer)
     if not myEntry then return nil end
-
     local equipped = myEntry:FindFirstChild("AbilityEquipped")
     if equipped and equipped:IsA("StringValue") and equipped.Value ~= "" then
         return equipped.Value
     end
-
     local casting = myEntry:FindFirstChild("CastingSpells")
     if casting then
         for _, v in ipairs(casting:GetChildren()) do
-            if v:IsA("BoolValue") and v.Value == true then
-                return v.Name
-            end
+            if v:IsA("BoolValue") and v.Value == true then return v.Name end
         end
     end
     return nil
 end
 
--- Single Target Rage Mode
 local function startRageMode(enabled)
     if not enabled then
         if rageConnection then rageConnection:Disconnect(); rageConnection = nil end
         return
     end
-    
     if rageConnection or not RunService then return end
-    
     rageConnection = RunService.Heartbeat:Connect(function()
         if not flags.rageMode or flags.rageTarget == "" or flags.rageTarget == "None" then return end
-        
         local targetName = string.match(flags.rageTarget, "^([^%s]+)")
         if not targetName then return end
-        
-        -- [FIX] Guard stale target model before firing
         local targetModel = workspace:FindFirstChild("LivingThings") and workspace.LivingThings:FindFirstChild(targetName)
         if not targetModel or not targetModel.Parent then return end
-        
         local ability = getCurrentAbility()
-        
         if ability and SpellHandler then
-            pcall(function()
-                SpellHandler:FireServer(targetModel, ability, nil)
-            end)
+            pcall(function() SpellHandler:FireServer(targetModel, ability, nil) end)
         end
     end)
 end
@@ -302,23 +406,17 @@ end
 -- Auto Herb Keybind
 -- ============================================================
 local herbConnection = nil
-
 local function startAutoHerb(enabled)
     if not enabled then
         if herbConnection then herbConnection:Disconnect(); herbConnection = nil end
         return
     end
-    
     if herbConnection or not RunService then return end
-    
     herbConnection = RunService.Heartbeat:Connect(function()
         if not flags.autoHerb then return end
-        
         if UserInputService:IsKeyDown(flags.autoHerbKey) then
             if SpellHandler then
-                pcall(function()
-                    SpellHandler:FireServer(nil, "HealingHerb")
-                end)
+                pcall(function() SpellHandler:FireServer(nil, "HealingHerb") end)
             end
         end
     end)
@@ -355,11 +453,7 @@ local function setupStaffJoinWatcher()
         local info = checkAndAddStaff(player)
         if info and staffNotifyEnabled and window then
             pcall(function()
-                window:Notify({
-                    title = "Staff Joined",
-                    content = (player.DisplayName or player.Name) .. " (" .. info.role .. ")",
-                    duration = 8,
-                })
+                window:Notify({ title = "Staff Joined", content = (player.DisplayName or player.Name) .. " (" .. info.role .. ")", duration = 8 })
             end)
         end
     end)
@@ -380,11 +474,13 @@ local CD_KIT_LISTS = {
     vampireCD = { "NeckSnap","WristSnap","BloodHeal","Feed","SpineBreak","EyeGouge","ThroatRip","BlinkAttack","MistMaw","MistCharge","SkyfallReaver","VampireStep" },
     wolfCD = { "ClawedBoxing","GutKick","MenacingGlare","NeckSnap" },
     witchCD = { "Ictus","Aquamalia","Immobilus","Invisique","Ossox","PoenaDoloris" },
-    regentCD = { "Obsidio","AntecesPoenam","AncestralPainInfliction","Vitalis" }, -- [ADDED] Regent kit abilities
+    regentCD = { "Obsidio","AntecesPoenam","AncestralPainInfliction","Vitalis" },
     unstableCD = { "Dissulta","QuarantineSpell","Stellabunde","TelekineticScream" },
     serumCD = { "OverheadCrush","SerumBite","StakeThrow","KnuckleDown" },
     soulbindCD = { "TelekineticWristSnap","SanguisSicco","SanguisDucatur","OmnisDormit","HarvestOverflow","NemoUnusAnimabusCarnem" },
     geminiCD = { "ISaidHey","Ignalusa","Ignarious","PervenioSupervenioAdvehor","ResistusMaledi" },
+    starGuardianCD = { "StarPulse","PrismaticAegis","ConstellationStep","RadientResonance","StarfallJudgment","StarlightBarrage" },
+    starNemesisCD = { "CorruptedPulse","ShatteredReflection","RiftStep","BlackHoleCollapse","DarkMatterRain" },
     expressionCD = { "Vados","Restraint","PhasmatosAerisCirculo","DoloremInferunt","Sanitatum" },
     ancientCD = { "VineManipulation","SequunturSomnia","MemoryOverload","AhShaLana" },
     darkCD = { "InvidiumCalamactus","DarkBlast","DarkBeam","Autem","Ascendo","AdvancedJapanesePurgingSpell","SiphonHug","MagicRevolve","DarkMagicLocator" },
@@ -392,6 +488,24 @@ local CD_KIT_LISTS = {
     awakenedSoulbindCD = { "SonicScream","Soulbinding","TelekineticCombo","HarvestChaos","LightningStrikeSpell","MassTelekineticSnap","MemoryWipingSpell","NemoUnusAnimabusCarnem" },
     originalMagicCD = { "AdvancedPainInfliction","CrowStorm","LinkShatter","ProtectiveSaltCircle","RestrainingChains","VictasConfracta","VampirismReversal","BloodlineChannel" },
     connectiveCD = { "SoulLink","ToolDestruction","AdvancedAneurysm","Wraithstep","Victas","SanguinemConfractus","FatedPursuit","EnchantedBind","ConnectiveField" },
+    relentlessHunterCD = {
+        "HuntersMark","Hunter'sMark","BladeOfSeverance","HuntersReversal","Hunter'sReversal","HuntersDomain","Hunter'sDomain",
+        "ArrowsDance","Arrow'sDance","ScorchedGround","RelentlessRecovery","BloodhuntFrenzy","PackBreaker","Packbreaker",
+        "FinalPursuite","MarkedReprisal","ThroatSlice"
+    },
+    hopeCD = {
+        "TelekineticDecapitation","Vitris","TribridScream","Mittem","EnergyProjectile","TelekineticScratch",
+        "Repulse","Ventus","Lecutio","IgnisScutum","CorporisImpetu","AncestralConflux","DeathInducementSpell"
+    },
+    phoenixCD = {
+        "PhoenixEntrance","DivineResurgence","InfernalEvasion","BlazingDive","WingedAssault",
+        "EmberTouch","CinderExtinguish","BurningTouch","PillarOfFlame"
+    },
+    kingOfHellCD = {
+        "FutureSight","EssenceVortex","PsychicBlast","TelekineticAttack","PhaseShift","SoulClaiming","Hellfire",
+        "ChainOfDespair","AbyssalPull","Monarch'sDomain","MonarchsDomain","FireManipulation","Fireball",
+        "AgonyOfTheDamned","FireVortex","FireExtinguish","HellTeleportation","SoulExchange"
+    },
     speckCD = { "MolecularImmobilization", "FireOverload", "CombustionSpells", "Level1", "Level2", "Level3" },
 }
 
@@ -412,8 +526,6 @@ local function fireCDList(list)
     end
 end
 
--- [FIX] CD loop now respects _cdLoopActive so Eject actually stops it
--- (task.spawn returns a thread, not a connection, so trackConn couldn't cancel it)
 if CooldownOffEvent then
     task.spawn(function()
         while flags._cdLoopActive do
@@ -511,11 +623,9 @@ local currentExpandedOrigSize = nil
 local function method_raycast()
     local mouse = UserInputService:GetMouseLocation()
     local unitRay = Camera:ViewportPointToRay(mouse.X, mouse.Y)
-    
     local rayParams = RaycastParams.new()
     rayParams.FilterType = Enum.RaycastFilterType.Exclude
     rayParams.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
-    
     local result = workspace:Raycast(unitRay.Origin, unitRay.Direction * 2000, rayParams)
     if result and result.Instance then
         local model = result.Instance:FindFirstAncestorOfClass("Model")
@@ -523,9 +633,7 @@ local function method_raycast()
             local player = Players:GetPlayerFromCharacter(model)
             if player and player ~= LocalPlayer then
                 local hum = model:FindFirstChildOfClass("Humanoid")
-                if hum and hum.Health > 0 and not isFriend(player) then
-                    return model
-                end
+                if hum and hum.Health > 0 and not isFriend(player) then return model end
             end
         end
     end
@@ -545,9 +653,7 @@ local function method_cameraCone()
                 local toChar = hrp.Position - camPos
                 local d = toChar.Magnitude
                 if d > 0 and d < bestDist then
-                    if toChar.Unit:Dot(dir) >= 0.90 then 
-                        best = char; bestDist = d 
-                    end
+                    if toChar.Unit:Dot(dir) >= 0.90 then best = char; bestDist = d end
                 end
             end
         end
@@ -582,58 +688,33 @@ local function isCarryingRelationship(char)
     local myEntry = getLivingEntry(LocalPlayer)
     local theirEntry = nil
     local theirPlayer = Players:GetPlayerFromCharacter(char)
-    if theirPlayer then
-        theirEntry = getLivingEntry(theirPlayer)
-    end
-    
+    if theirPlayer then theirEntry = getLivingEntry(theirPlayer) end
     if myEntry then
         local carriedPerson = myEntry:FindFirstChild("CarriedPerson")
         local carriedBy = myEntry:FindFirstChild("CarriedBy")
-        
         if carriedPerson and carriedPerson.Value == char.Name then return true end
         if carriedBy and carriedBy.Value ~= "" and theirPlayer and carriedBy.Value == theirPlayer.Name then return true end
     end
-    
     if theirEntry and theirEntry:FindFirstChild("CarriedPerson") then
         if theirEntry.CarriedPerson.Value == LocalPlayer.Name then return true end
     end
-    
     return false
 end
 
 local function updateAimHitbox()
-    if not flags.hitboxEnabled then
-        resetAimHitbox()
-        return
-    end
-
+    if not flags.hitboxEnabled then resetAimHitbox(); return end
     local char = currentAimTarget
-    if not char then
-        resetAimHitbox()
-        return
-    end
-
+    if not char then resetAimHitbox(); return end
     local hrp = char:FindFirstChild("HumanoidRootPart")
     local hum = char:FindFirstChildOfClass("Humanoid")
-    
     local player = Players:GetPlayerFromCharacter(char)
-    
-    if isCarryingRelationship(char) then
-        resetAimHitbox()
-        return
-    end
-
-    if not hrp or not hum or hum.Health <= 0 or (player and isFriend(player)) then
-        resetAimHitbox()
-        return
-    end
-
+    if isCarryingRelationship(char) then resetAimHitbox(); return end
+    if not hrp or not hum or hum.Health <= 0 or (player and isFriend(player)) then resetAimHitbox(); return end
     if currentExpandedHRP ~= hrp then
         resetAimHitbox()
         currentExpandedHRP = hrp
         currentExpandedOrigSize = hrp.Size
     end
-
     local sz = Vector3.new(flags.hitboxSize, flags.hitboxSize, flags.hitboxSize)
     hrp.Size = sz
     hrp.Transparency = flags.hitboxShow and 0.7 or 1
@@ -644,8 +725,7 @@ end
 if RunService then
     trackConn(RunService.RenderStepped:Connect(function()
         currentAimTarget = findTarget()
-
-        if not flags.targetVisEnabled then 
+        if not flags.targetVisEnabled then
             clearTargetVis()
         elseif currentAimTarget then
             local head = currentAimTarget:FindFirstChild("Head") or currentAimTarget:FindFirstChild("HumanoidRootPart")
@@ -660,18 +740,15 @@ if RunService then
                     targetDotGui.AlwaysOnTop = true
                     targetDotGui.LightInfluence = 0
                     targetDotGui.ResetOnSpawn = false
-                    
                     local dot = Instance.new("Frame")
                     dot.Name = "Dot"
                     dot.BackgroundColor3 = flags.targetVisColor
                     dot.BorderSizePixel = 0
                     dot.Size = UDim2.new(1, 0, 1, 0)
                     dot.Parent = targetDotGui
-                    
                     local corner = Instance.new("UICorner")
                     corner.CornerRadius = UDim.new(1, 0)
                     corner.Parent = dot
-                    
                     targetDotGui.Parent = head
                 end
                 local dot = targetDotGui:FindFirstChild("Dot")
@@ -680,7 +757,6 @@ if RunService then
         else
             clearTargetVis()
         end
-
         updateAimHitbox()
     end))
 end
@@ -822,14 +898,12 @@ local function createESP(player)
     frame.BackgroundTransparency = 1
     frame.Size = UDim2.new(1, 0, 1, 0)
     frame.Parent = b
-
     local speciesLbl = makeLabel(frame, 13)
     local nameLbl    = makeLabel(frame, 14)
     local bloodLbl   = makeLabel(frame, 13)
     local spellLbl   = makeLabel(frame, 13)
     local invisLbl   = makeLabel(frame, 13)
     local distLbl    = makeLabel(frame, 12)
-
     local hpBarBg = Instance.new("Frame")
     hpBarBg.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
     hpBarBg.BackgroundTransparency = 0.4
@@ -842,7 +916,6 @@ local function createESP(player)
     hpFill.BorderSizePixel = 0
     hpFill.Size = UDim2.new(1, 0, 1, 0)
     hpFill.Parent = hpBarBg
-
     espEntries[player] = {
         gui = b, frame = frame,
         species = speciesLbl, name = nameLbl, bloodline = bloodLbl,
@@ -912,13 +985,10 @@ local function renderESP()
                     espState[player] = st
                 end
                 if st.casting and not isAlive(st.casting) then st.casting = getCastingFolder(player) end
-
                 local speciesText = (flags.species and st.speciesText and st.speciesText ~= "") and st.speciesText or nil
-                
                 local isFriendPlayer = isFriend(player)
                 local nameRichText = nil
                 local nameColor = Color3.new(1, 1, 1)
-                
                 if flags.name then
                     local displayName = player.DisplayName
                     if displayName and displayName ~= player.Name then
@@ -926,18 +996,13 @@ local function renderESP()
                     else
                         nameRichText = string.format('<font size="14">%s</font>', player.Name)
                     end
-                    
-                    if isFriendPlayer then
-                        nameColor = flags.friendColor
-                    end
+                    if isFriendPlayer then nameColor = flags.friendColor end
                 end
-
                 local bloodText = (flags.bloodline and st.bloodlineText and st.bloodlineText ~= "") and st.bloodlineText or nil
                 local spellName = flags.spellESP and getActiveSpellName(st.casting) or nil
                 local isInvis = flags.visESP and isInvisible(st.casting) or false
                 local showHP = flags.healthBar and hum.MaxHealth > 0
                 local distText = flags.distance and (floor(dist) .. " studs") or nil
-
                 e.species.Visible = false; e.name.Visible = false
                 e.bloodline.Visible = false; e.spell.Visible = false
                 e.invis.Visible = false; e.distance.Visible = false
@@ -1021,24 +1086,18 @@ local lastDJText = ""
 local function getStruggleTextLabel()
     local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
     if not playerGui then return nil end
-    
     local effects = playerGui:FindFirstChild("Effects")
     if not effects then return nil end
-    
     local system = effects:FindFirstChild("AbilityStruggleSystem") or effects:FindFirstChild("AStruggleSystem")
     if not system then return nil end
-    
     local frame = system:FindFirstChild("Frame")
     if not frame then return nil end
-    
     return frame:FindFirstChild("TextLabel")
 end
 
 local function getKeyCode(char)
     char = string.upper(char)
-    if char:match("^[A-Z]$") then
-        return Enum.KeyCode[char]
-    end
+    if char:match("^[A-Z]$") then return Enum.KeyCode[char] end
     return nil
 end
 
@@ -1049,21 +1108,15 @@ local function startDJChallenge(enabled)
         return
     end
     if djConnection or not RunService then return end
-    
     djConnection = RunService.RenderStepped:Connect(function()
         if not flags.djChallenge then return end
-        
         local textLabel = getStruggleTextLabel()
-        
         if textLabel and textLabel.Visible then
             local currentText = textLabel.Text
-            
             if #currentText == 1 and currentText ~= lastDJText then
                 local keyCode = getKeyCode(currentText)
-                
                 if keyCode then
                     lastDJText = currentText
-                    
                     VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
                     task.wait(0.02)
                     VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
@@ -1078,16 +1131,14 @@ end
 -- ============================================================
 -- Window
 -- ============================================================
--- [FIX] Config filename changed from default "ExampleHub" to "MegsGui"
 local window = Rayfield:CreateWindow({
     name = "Megs Gui",
-    subtitle = "v1.0.2",
+    subtitle = "v1.0.9",
     sidebarLayout = true,
     theme = "cobalt",
     configuration = { autoSave = true, autoLoad = true, fileName = "MegsGui" },
 })
 
--- Staff toggle callback
 local function onStaffToggleChanged(v)
     staffNotifyEnabled = v
     if v then
@@ -1126,16 +1177,8 @@ end })
 
 combatTab:CreateDivider()
 combatTab:CreateSection({ name = "Rage Mode" })
-
-combatTab:CreateToggle({ 
-    name = "Enable Rage Mode", 
-    flag = "RageMode", 
-    value = flags.rageMode,
-    callback = function(on) 
-        flags.rageMode = on
-        startRageMode(on) 
-    end 
-})
+combatTab:CreateToggle({ name = "Enable Rage Mode", flag = "RageMode", value = flags.rageMode,
+    callback = function(on) flags.rageMode = on; startRageMode(on) end })
 
 local rageDropdown = combatTab:CreateDropdown({
     name = "Target Player",
@@ -1148,39 +1191,21 @@ local rageDropdown = combatTab:CreateDropdown({
 combatTab:CreateButton({
     name = "Refresh Player List",
     callback = function()
-        local newList = getPlayerList()
-        rageDropdown:Refresh(newList)
+        rageDropdown:Refresh(getPlayerList())
         window:Notify({ title = "Rage Mode", content = "Player list refreshed." })
     end
 })
 
 combatTab:CreateDivider()
 combatTab:CreateSection({ name = "Exclude Friends" })
-
-combatTab:CreateToggle({
-    name = "Exclude Friends",
-    flag = "IgnoreFriends",
-    value = flags.ignoreFriends,
-    callback = function(on) 
-        flags.ignoreFriends = on
-        resetAimHitbox()
-    end
-})
-
-combatTab:CreateButton({
-    name = "Refresh Friends List",
-    callback = function()
-        refreshFriendsList()
-        window:Notify({ title = "Friends List", content = "Refreshed successfully." })
-    end
-})
-
-combatTab:CreateColorPicker({
-    name = "Friend Color",
-    color = flags.friendColor,
-    flag = "FriendColor",
-    callback = function(c) flags.friendColor = c end
-})
+combatTab:CreateToggle({ name = "Exclude Friends", flag = "IgnoreFriends", value = flags.ignoreFriends,
+    callback = function(on) flags.ignoreFriends = on; resetAimHitbox() end })
+combatTab:CreateButton({ name = "Refresh Friends List", callback = function()
+    refreshFriendsList()
+    window:Notify({ title = "Friends List", content = "Refreshed successfully." })
+end })
+combatTab:CreateColorPicker({ name = "Friend Color", color = flags.friendColor, flag = "FriendColor",
+    callback = function(c) flags.friendColor = c end })
 
 combatTab:CreateDivider()
 combatTab:CreateSection({ name = "Target Visualizer" })
@@ -1194,7 +1219,7 @@ combatTab:CreateSection({ name = "CD Removal — Base Kits" })
 combatTab:CreateToggle({ name = "Vampire", flag = "VampireCD", value = flags.vampireCD, callback = function(v) flags.vampireCD = v end })
 combatTab:CreateToggle({ name = "Werewolf", flag = "WolfCD", value = flags.wolfCD, callback = function(v) flags.wolfCD = v end })
 combatTab:CreateToggle({ name = "Witch", flag = "WitchCD", value = flags.witchCD, callback = function(v) flags.witchCD = v end })
-combatTab:CreateToggle({ name = "Regent", flag = "RegentCD", value = flags.regentCD, callback = function(v) flags.regentCD = v end }) -- [ADDED]
+combatTab:CreateToggle({ name = "Regent", flag = "RegentCD", value = flags.regentCD, callback = function(v) flags.regentCD = v end })
 
 combatTab:CreateDivider()
 combatTab:CreateSection({ name = "CD Removal — Coins Kits" })
@@ -1202,6 +1227,8 @@ combatTab:CreateToggle({ name = "Unstable", flag = "UnstableCD", value = flags.u
 combatTab:CreateToggle({ name = "Serum", flag = "SerumCD", value = flags.serumCD, callback = function(v) flags.serumCD = v end })
 combatTab:CreateToggle({ name = "Soulbind", flag = "SoulbindCD", value = flags.soulbindCD, callback = function(v) flags.soulbindCD = v end })
 combatTab:CreateToggle({ name = "Gemini", flag = "GeminiCD", value = flags.geminiCD, callback = function(v) flags.geminiCD = v end })
+combatTab:CreateToggle({ name = "Star Guardian", flag = "StarGuardianCD", value = flags.starGuardianCD, callback = function(v) flags.starGuardianCD = v end })
+combatTab:CreateToggle({ name = "Star Nemesis", flag = "StarNemesisCD", value = flags.starNemesisCD, callback = function(v) flags.starNemesisCD = v end })
 
 combatTab:CreateDivider()
 combatTab:CreateSection({ name = "CD Removal — Gamepass Kits" })
@@ -1212,6 +1239,10 @@ combatTab:CreateToggle({ name = "Astral", flag = "AstralCD", value = flags.astra
 combatTab:CreateToggle({ name = "Awakened Soulbind", flag = "AwakenedSoulbindCD", value = flags.awakenedSoulbindCD, callback = function(v) flags.awakenedSoulbindCD = v end })
 combatTab:CreateToggle({ name = "Original Magic", flag = "OriginalMagicCD", value = flags.originalMagicCD, callback = function(v) flags.originalMagicCD = v end })
 combatTab:CreateToggle({ name = "Connective", flag = "ConnectiveCD", value = flags.connectiveCD, callback = function(v) flags.connectiveCD = v end })
+combatTab:CreateToggle({ name = "Relentless Hunter", flag = "RelentlessHunterCD", value = flags.relentlessHunterCD, callback = function(v) flags.relentlessHunterCD = v end })
+combatTab:CreateToggle({ name = "Hope", flag = "HopeCD", value = flags.hopeCD, callback = function(v) flags.hopeCD = v end })
+combatTab:CreateToggle({ name = "Phoenix", flag = "PhoenixCD", value = flags.phoenixCD, callback = function(v) flags.phoenixCD = v end })
+combatTab:CreateToggle({ name = "King of Hell", flag = "KingOfHellCD", value = flags.kingOfHellCD, callback = function(v) flags.kingOfHellCD = v end })
 
 combatTab:CreateDivider()
 combatTab:CreateSection({ name = "CD Removal — Speck" })
@@ -1243,24 +1274,59 @@ espTab:CreateColorPicker({ name = "Totem Color", color = flags.totemColor, flag 
 -- ── ASSISTANCE TAB ──────────────────────────────────────────
 local assistTab = window:CreateTab({ name = "Assistance" })
 
+-- [FIX] Teleport to Player — store selection in a local var via callback,
+-- do NOT read the dropdown's .Value at button time (it can be stale/nil).
+assistTab:CreateSection({ name = "Teleport to Player" })
+local tpSelectedPlayerName = nil
+local tpPlayerDropdown = assistTab:CreateDropdown({
+    name = "Select Player",
+    options = getAllPlayerList(),
+    value = nil,
+    flag = "TPSelectedPlayer",
+    callback = function(sel)
+        tpSelectedPlayerName = sel -- [FIX] reliable selection storage
+    end
+})
+
+assistTab:CreateButton({
+    name = "Teleport to Selected Player",
+    callback = function()
+        local target = resolvePlayerFromString(tpSelectedPlayerName)
+        if not target then
+            window:Notify({ title = "Teleport", content = "No player selected (or they left).", duration = 4 })
+            return
+        end
+        local char = target.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        local myChar = LocalPlayer.Character
+        local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        if not hrp then
+            window:Notify({ title = "Teleport Failed", content = target.Name .. " has no HRP (respawning?).", duration = 4 })
+            return
+        end
+        if not myHRP then
+            window:Notify({ title = "Teleport Failed", content = "You are not spawned.", duration = 4 })
+            return
+        end
+        myHRP.CFrame = hrp.CFrame + Vector3.new(0, 0, 3)
+        window:Notify({ title = "Teleported", content = "Teleported to " .. target.Name, duration = 4 })
+    end
+})
+
+assistTab:CreateButton({
+    name = "Refresh Player List",
+    callback = function()
+        tpPlayerDropdown:Refresh(getAllPlayerList())
+        window:Notify({ title = "Teleport", content = "Player list refreshed.", duration = 4 })
+    end
+})
+
+assistTab:CreateDivider()
 assistTab:CreateSection({ name = "Auto Herb" })
-
-assistTab:CreateToggle({ 
-    name = "Enable Auto Herb", 
-    flag = "AutoHerb", 
-    value = flags.autoHerb,
-    callback = function(on) 
-        flags.autoHerb = on
-        startAutoHerb(on) 
-    end 
-})
-
-assistTab:CreateKeybind({
-    name = "Auto Herb Key",
-    value = flags.autoHerbKey,
-    flag = "AutoHerbKey",
-    callback = function(key) flags.autoHerbKey = key end
-})
+assistTab:CreateToggle({ name = "Enable Auto Herb", flag = "AutoHerb", value = flags.autoHerb,
+    callback = function(on) flags.autoHerb = on; startAutoHerb(on) end })
+assistTab:CreateKeybind({ name = "Auto Herb Key", value = flags.autoHerbKey, flag = "AutoHerbKey",
+    callback = function(key) flags.autoHerbKey = key end })
 
 assistTab:CreateDivider()
 assistTab:CreateSection({ name = "Mini-Games" })
@@ -1285,102 +1351,39 @@ assistTab:CreateToggle({ name = "Noclip", flag = "Noclip", value = flags.noclip,
 
 -- ── INFORMATION TAB ─────────────────────────────────────────
 local infoTab = window:CreateTab({ name = "Information" })
-
 infoTab:CreateSection({ name = "Information" })
-
-infoTab:CreateText({
-    name = "Welcome ^.^",
-    text = "This section provides details on which abilities work with CD Removal for each kit."
-})
+infoTab:CreateText({ name = "Welcome ^.^", text = "This section provides details on which abilities work with CD Removal for each kit." })
 
 infoTab:CreateDivider()
 infoTab:CreateSection({ name = "Base Kits" })
-
-infoTab:CreateText({
-    name = "Vampire",
-    text = "Full no cooldowns — every ability resets."
-})
-
-infoTab:CreateText({
-    name = "Wolf",
-    text = "Only some work (Clawed Boxing, Gut Kick, Menacing Glare).\nMost of these you need to fully do for the CD to return."
-})
-
-infoTab:CreateText({
-    name = "Witch",
-    text = "Same as wolf, only some abilities work.\nAbilities: Ictus, Aquamalia, Immobilus, Invisique, Ossox, Poena Doloris."
-})
-
-infoTab:CreateText({
-    name = "Regent",
-    text = "Obsidio, AntecesPoenam, AncestralPainInfliction, Vitalis.\nMost of these you need to fully do for the CD to return."
-})
+infoTab:CreateText({ name = "Vampire", text = "Full no cooldowns — every ability resets." })
+infoTab:CreateText({ name = "Wolf", text = "Only some work (Clawed Boxing, Gut Kick, Menacing Glare).\nMost of these you need to fully do for the CD to return." })
+infoTab:CreateText({ name = "Witch", text = "Same as wolf, only some abilities work.\nAbilities: Ictus, Aquamalia, Immobilus, Invisique, Ossox, Poena Doloris." })
+infoTab:CreateText({ name = "Regent", text = "Obsidio, AntecesPoenam, AncestralPainInfliction, Vitalis.\nMost of these you need to fully do for the CD to return." })
 
 infoTab:CreateDivider()
 infoTab:CreateSection({ name = "Coins Characters" })
-
-infoTab:CreateText({
-    name = "Unstable",
-    text = "Dissulta, QuarantineSpell, Stellabunde, TelekineticScream.\nMost of these you need to fully do for the CD to return."
-})
-
-infoTab:CreateText({
-    name = "Serum",
-    text = "OverheadCrush, SerumBite, StakeThrow, KnuckleDown.\nMost of these you need to fully do for the CD to return."
-})
-
-infoTab:CreateText({
-    name = "Soulbind",
-    text = "Kit has full no cooldowns."
-})
-
-infoTab:CreateText({
-    name = "Gemini",
-    text = "Kit has full no cooldowns."
-})
+infoTab:CreateText({ name = "Unstable", text = "Dissulta, QuarantineSpell, Stellabunde, TelekineticScream.\nMost of these you need to fully do for the CD to return." })
+infoTab:CreateText({ name = "Serum", text = "OverheadCrush, SerumBite, StakeThrow, KnuckleDown.\nMost of these you need to fully do for the CD to return." })
+infoTab:CreateText({ name = "Soulbind", text = "Kit has full no cooldowns." })
+infoTab:CreateText({ name = "Gemini", text = "Kit has full no cooldowns." })
+infoTab:CreateText({ name = "Star Guardian", text = "StarPulse, PrismaticAegis, ConstellationStep, RadientResonance, StarfallJudgment, StarlightBarrage.\nMost of these you need to fully do for the CD to return." })
+infoTab:CreateText({ name = "Star Nemesis", text = "CorruptedPulse, ShatteredReflection, RiftStep, BlackHoleCollapse, DarkMatterRain.\nMost of these you need to fully do for the CD to return." })
 
 infoTab:CreateDivider()
 infoTab:CreateSection({ name = "Gamepasses" })
-
-infoTab:CreateText({
-    name = "Expression",
-    text = "Vados, Restraint, PhasmatosAerisCirculo, DoloremInferunt, Sanitatum.\nMost of these you need to fully do for the CD to return."
-})
-
-infoTab:CreateText({
-    name = "Ancient",
-    text = "VineManipulation, SequunturSomnia, MemoryOverload, AhShaLana.\nMost of these you need to fully do for the CD to return."
-})
-
-infoTab:CreateText({
-    name = "Dark",
-    text = "InvidiumCalamactus, DarkBlast, DarkBeam, Autem, Ascendo, AdvancedJapanesePurgingSpell, SiphonHug, MagicRevolve, DarkMagicLocator.\nMost of these you need to fully do for the CD to return."
-})
-
-infoTab:CreateText({
-    name = "Astral",
-    text = "CrowTransformation, BrainMelt, CardiacArrest, PhaseCollapse, SygilSpell, VampirismWeakening, AncestralEradication, ToxinsRemedy.\nMost of these you need to fully do for the CD to return."
-})
-
-infoTab:CreateText({
-    name = "Awakened Soulbind",
-    text = "Kit has full no cooldowns."
-})
-
-infoTab:CreateText({
-    name = "Original Magic",
-    text = "AdvancedPainInfliction, CrowStorm, LinkShatter, ProtectiveSaltCircle, RestrainingChains, VictasConfracta, VampirismReversal, BloodlineChannel.\nMost of these you need to fully do for the CD to return."
-})
-
-infoTab:CreateText({
-    name = "Connective",
-    text = "SoulLink, ToolDestruction, AdvancedAneurysm, Wraithstep, Victas, SanguinemConfractus, FatedPursuit, EnchantedBind, ConnectiveField.\nMost of these you need to fully do for the CD to return."
-})
-
-infoTab:CreateText({
-    name = "Speck",
-    text = "MolecularImmobilization, FireOverload, CombustionSpells, Level1, Level2, Level3.\nMost of these you need to fully do for the CD to return."
-})
+infoTab:CreateText({ name = "Expression", text = "Vados, Restraint, PhasmatosAerisCirculo, DoloremInferunt, Sanitatum.\nMost of these you need to fully do for the CD to return." })
+infoTab:CreateText({ name = "Ancient", text = "VineManipulation, SequunturSomnia, MemoryOverload, AhShaLana.\nMost of these you need to fully do for the CD to return." })
+infoTab:CreateText({ name = "Dark", text = "InvidiumCalamactus, DarkBlast, DarkBeam, Autem, Ascendo, AdvancedJapanesePurgingSpell, SiphonHug, MagicRevolve, DarkMagicLocator.\nMost of these you need to fully do for the CD to return." })
+infoTab:CreateText({ name = "Astral", text = "CrowTransformation, BrainMelt, CardiacArrest, PhaseCollapse, SygilSpell, VampirismWeakening, AncestralEradication, ToxinsRemedy.\nMost of these you need to fully do for the CD to return." })
+infoTab:CreateText({ name = "Awakened Soulbind", text = "Kit has full no cooldowns." })
+infoTab:CreateText({ name = "Original Magic", text = "AdvancedPainInfliction, CrowStorm, LinkShatter, ProtectiveSaltCircle, RestrainingChains, VictasConfracta, VampirismReversal, BloodlineChannel.\nMost of these you need to fully do for the CD to return." })
+infoTab:CreateText({ name = "Connective", text = "SoulLink, ToolDestruction, AdvancedAneurysm, Wraithstep, Victas, SanguinemConfractus, FatedPursuit, EnchantedBind, ConnectiveField.\nMost of these you need to fully do for the CD to return." })
+infoTab:CreateText({ name = "Relentless Hunter", text = "HuntersMark, BladeOfSeverance, HuntersReversal, HuntersDomain, ArrowsDance, ScorchedGround, RelentlessRecovery, BloodhuntFrenzy, PackBreaker, FinalPursuite, MarkedReprisal, ThroatSlice.\nMost of these you need to fully do for the CD to return." })
+infoTab:CreateText({ name = "Hope", text = "TelekineticDecapitation, Vitris, TribridScream, Mittem, EnergyProjectile, TelekineticScratch, Repulse, Ventus, Lecutio, IgnisScutum, CorporisImpetu, AncestralConflux, DeathInducementSpell.\nMost of these you need to fully do for the CD to return." })
+infoTab:CreateText({ name = "Phoenix", text = "PhoenixEntrance, DivineResurgence, InfernalEvasion, BlazingDive, WingedAssault, EmberTouch, CinderExtinguish, BurningTouch, PillarOfFlame.\nMost of these you need to fully do for the CD to return." })
+infoTab:CreateText({ name = "King of Hell", text = "FutureSight, EssenceVortex, PsychicBlast, TelekineticAttack, PhaseShift, SoulClaiming, Hellfire, ChainOfDespair, AbyssalPull, Monarch'sDomain, FireManipulation, Fireball, AgonyOfTheDamned, FireVortex, FireExtinguish, HellTeleportation, SoulExchange.\nMost of these you need to fully do for the CD to return." })
+infoTab:CreateText({ name = "Speck", text = "MolecularImmobilization, FireOverload, CombustionSpells, Level1, Level2, Level3.\nMost of these you need to fully do for the CD to return." })
 
 -- ── SETTINGS TAB ────────────────────────────────────────────
 local settingsTab = window:CreateTab({ name = "Settings" })
@@ -1421,7 +1424,6 @@ settingsTab:CreateDivider()
 settingsTab:CreateSection({ name = "Danger Zone" })
 settingsTab:CreateButton({ name = "Eject Script", description = "Stops all features and closes the UI.",
     callback = function()
-        -- [FIX] Stop the CD loop via its control flag
         flags._cdLoopActive = false
         for k in pairs(CD_KIT_LISTS) do flags[k] = false end
         flags.djChallenge = false
@@ -1436,7 +1438,6 @@ settingsTab:CreateButton({ name = "Eject Script", description = "Stops all featu
         flags.totemESP = false
         for part in pairs(totemEntries) do removeTotemObjects(part) end
         totemEntries = {}
-        -- [FIX] Clear staff state on eject
         staffNotifyEnabled = false
         currentStaff = {}
         if staffOnJoinConnection then pcall(function() staffOnJoinConnection:Disconnect() end); staffOnJoinConnection = nil end
@@ -1450,10 +1451,14 @@ settingsTab:CreateButton({ name = "Eject Script", description = "Stops all featu
 -- ── Load ────────────────────────────────────────────────────
 task.spawn(function()
     task.wait(1)
-    -- [FIX] Only say bypass enabled if it actually succeeded
     if bypassSucceeded then
         window:Notify({ title = "Auto Bypass", content = "Auto Bypass enabled", duration = 4 })
     else
         window:Notify({ title = "Auto Bypass", content = "No anti-cheat found (or unsupported)", duration = 4 })
+    end
+    if Adonis.Succeeded then
+        window:Notify({ title = "Adonis Bypass", content = "Adonis bypassed successfully.", duration = 4 })
+    elseif Adonis.Detected then
+        window:Notify({ title = "Adonis Bypass", content = "Adonis detected but bypass failed.", duration = 5 })
     end
 end)
