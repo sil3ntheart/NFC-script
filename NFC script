@@ -385,7 +385,7 @@ local CD_KIT_LISTS = {
     awakenedSoulbindCD = { "SonicScream","Soulbinding","TelekineticCombo","HarvestChaos","LightningStrikeSpell","MassTelekineticSnap","MemoryWipingSpell","NemoUnusAnimabusCarnem" },
     originalMagicCD = { "AdvancedPainInfliction","CrowStorm","LinkShatter","ProtectiveSaltCircle","RestrainingChains","VictasConfracta","VampirismReversal","BloodlineChannel" },
     connectiveCD = { "SoulLink","ToolDestruction","AdvancedAneurysm","Wraithstep","Victas","SanguinemConfractus","FatedPursuit","EnchantedBind","ConnectiveField" },
-    speckCD = { "MolecularImmobilization", "FireOverload", "CombustionSpells" }, -- [ADDED] Speck kit abilities
+    speckCD = { "MolecularImmobilization", "FireOverload", "CombustionSpells", "Level1", "Level2", "Level3" }, -- [ADDED] Speck kit abilities
 }
 
 local function fireCDList(list)
