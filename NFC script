@@ -418,69 +418,137 @@ local function startAutoHerb(enabled)
 end
 
 -- ============================================================
--- Auto Carry Struggle (Delay 5-20s before starting)
+-- Auto Carry Struggle (Delay 5-20s before starting) — FIXED
 -- ============================================================
 local autoCarryStruggleConnections = {}
 local autoCarryIsProcessing = false
+local autoCarryGeneration = 0  -- invalidates stale delayed tasks
+
+local function getStruggleUI()
+    -- Re-resolves fresh each time (handles respawn / UI rebuild)
+    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+    if not playerGui then return nil end
+    local effects = playerGui:FindFirstChild("Effects")
+    if not effects then return nil end
+    -- Support both system names used by the game
+    local system = effects:FindFirstChild("AStruggleSystem")
+                 or effects:FindFirstChild("AbilityStruggleSystem")
+    if not system then return nil end
+    local frame = system:FindFirstChild("Frame")
+    if not frame then return nil end
+    local textLabel = frame:FindFirstChild("TextLabel")
+    if not textLabel then return nil end
+    return system, textLabel
+end
 
 local function startAutoCarryStruggle(enabled)
-    for _, c in ipairs(autoCarryStruggleConnections) do pcall(function() c:Disconnect() end) end
+    -- Tear down any existing connections first
+    for _, c in ipairs(autoCarryStruggleConnections) do
+        pcall(function() c:Disconnect() end)
+    end
     table.clear(autoCarryStruggleConnections)
+    autoCarryIsProcessing = false
+    autoCarryGeneration = autoCarryGeneration + 1
+    local myGen = autoCarryGeneration
+
     if not enabled then return end
 
-    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
-    if not playerGui then return end
-    local effects = playerGui:FindFirstChild("Effects")
-    if not effects then return end
-    local struggleSystem = effects:FindFirstChild("AStruggleSystem")
-    if not struggleSystem then return end
-    local frame = struggleSystem:FindFirstChild("Frame")
-    if not frame then return end
-    local textLabel = frame:FindFirstChild("TextLabel")
-    if not textLabel then return end
+    local function isValid()
+        return flags.autoCarryStruggle and myGen == autoCarryGeneration
+    end
 
     local function pressKey(keyName)
-        if not flags.autoCarryStruggle then return end
+        if not isValid() then return end
         if autoCarryIsProcessing then return end
         autoCarryIsProcessing = true
-        
-        -- [FIX] Wrapped in parentheses to prevent string.upper argument mismatch
-        local cleanedKey = string.upper((string.gsub(keyName or "", "%s+", "")))
-        local success, keyCode = pcall(function() return Enum.KeyCode[cleanedKey] end)
+        -- Wrapped so ANY error still resets the processing flag
+        local ok, err = pcall(function()
+            local cleanedKey = string.upper((string.gsub(keyName or "", "%s+", "")))
+            if cleanedKey == "" then return end
+            local keyCode = Enum.KeyCode[cleanedKey]
+            if not keyCode then return end
 
-        if success and keyCode then
-            if struggleSystem.Enabled then
-                -- Send key instantly (no delay between presses)
-                VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
-                task.wait(0.05)
-                VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
-            end
+            -- Re-fetch system each press in case it was rebuilt
+            local system = getStruggleUI()
+            if not system or not system.Enabled then return end
+
+            VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
+            task.wait(0.05)
+            VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
+        end)
+        if not ok then
+            warn("[AutoCarryStruggle] pressKey error: " .. tostring(err))
         end
         autoCarryIsProcessing = false
     end
 
-    table.insert(autoCarryStruggleConnections, struggleSystem:GetPropertyChangedSignal("Enabled"):Connect(function()
-        if flags.autoCarryStruggle and struggleSystem.Enabled then 
-            -- Delay before starting
-            task.delay(flags.autoCarryStruggleDelay, function()
-                if flags.autoCarryStruggle and struggleSystem.Enabled then
-                    pressKey(textLabel.Text) 
-                end
-            end)
-        end
-    end))
-
-    table.insert(autoCarryStruggleConnections, textLabel:GetPropertyChangedSignal("Text"):Connect(function()
-        if flags.autoCarryStruggle and struggleSystem.Enabled then pressKey(textLabel.Text) end
-    end))
-
-    if struggleSystem.Enabled then 
-        task.delay(flags.autoCarryStruggleDelay, function()
-            if flags.autoCarryStruggle and struggleSystem.Enabled then
-                pressKey(textLabel.Text) 
-            end
+    local function schedulePress(initial)
+        -- Cancel any pending presses from earlier activations
+        local gen = myGen
+        task.delay(initial and flags.autoCarryStruggleDelay or 0, function()
+            if not isValid() then return end
+            if gen ~= autoCarryGeneration then return end
+            local system, textLabel = getStruggleUI()
+            if not system or not system.Enabled then return end
+            if not textLabel or textLabel.Text == "" then return end
+            pressKey(textLabel.Text)
         end)
     end
+
+    local function bind()
+        if not isValid() then return end
+        local system, textLabel = getStruggleUI()
+        if not system or not textLabel then return end
+
+        -- If already enabled when we bind, kick off after delay
+        if system.Enabled then schedulePress(true) end
+
+        table.insert(autoCarryStruggleConnections,
+            system:GetPropertyChangedSignal("Enabled"):Connect(function()
+                if not isValid() then return end
+                if system.Enabled then
+                    schedulePress(true)
+                end
+            end))
+
+        table.insert(autoCarryStruggleConnections,
+            textLabel:GetPropertyChangedSignal("Text"):Connect(function()
+                if not isValid() then return end
+                if not system.Enabled then return end
+                -- Only auto-press on subsequent text changes (not initial)
+                pressKey(textLabel.Text)
+            end))
+    end
+
+    -- Bind now, and re-bind whenever the game rebuilds the UI hierarchy.
+    -- Watching PlayerGui ensures we recover after respawn / re-carry.
+    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+    if playerGui then
+        bind()
+        -- Rebind when the struggle system reappears (parent chain changes)
+        table.insert(autoCarryStruggleConnections,
+            playerGui.DescendantAdded:Connect(function(inst)
+                if not isValid() then return end
+                if inst.Name == "AStruggleSystem" or inst.Name == "AbilityStruggleSystem"
+                   or inst.Name == "TextLabel" then
+                    task.defer(function()
+                        if isValid() then bind() end
+                    end)
+                end
+            end))
+    end
+
+    -- Watchdog: if the UI vanished and later returns, rebind periodically.
+    table.insert(autoCarryStruggleConnections,
+        RunService.Heartbeat:Connect(function()
+            if not isValid() then return end
+            -- Cheap check: if we have zero live connections to a valid TextLabel, rebind.
+            local system, textLabel = getStruggleUI()
+            if not system or not textLabel then return end
+            if textLabel.Parent == nil then
+                bind()
+            end
+        end))
 end
 
 -- ============================================================
@@ -1243,7 +1311,6 @@ local window = Rayfield:CreateWindow({
     configuration = { autoSave = true, autoLoad = true, fileName = "MegsGui" },
 })
 
--- [FIX] Moved below window to prevent global shadow warning
 local function onStaffToggleChanged(v)
     staffNotifyEnabled = v
     if v then
@@ -1479,7 +1546,6 @@ assistTab:CreateKeybind({ name = "Auto Herb Key", value = flags.autoHerbKey, fla
 assistTab:CreateToggle({ name = "Auto Carry Struggle", flag = "AutoCarryStruggle", value = flags.autoCarryStruggle,
     callback = function(on) flags.autoCarryStruggle = on; startAutoCarryStruggle(on) end })
 
--- [UPDATED] Range is now 5 to 20 seconds
 assistTab:CreateSlider({ name = "Auto Carry Struggle Delay", range = { 5, 20 }, increment = 1, value = 5,
     suffix = "s", flag = "AutoCarryStruggleDelay",
     callback = function(v) flags.autoCarryStruggleDelay = v end })
