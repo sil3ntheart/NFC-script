@@ -1,5 +1,5 @@
 -- ============================================================
--- NFC Script v1.4.5 (Bloodline & New Kits)
+-- NFC Script v1.5.1 (Final Clean Build)
 -- Combat / ESP / Assistance / Settings / Information
 -- ============================================================
 
@@ -250,7 +250,7 @@ local flags = {
     expressionCD = false, ancientCD = false, darkCD = false, astralCD = false,
     awakenedSoulbindCD = false, originalMagicCD = false, connectiveCD = false,
     relentlessHunterCD = false, hopeCD = false, phoenixCD = false, kingOfHellCD = false,
-    rosuseauWitchCD = false, weakenedHereticCD = false, -- [CHANGED]
+    rosuseauWitchCD = false, weakenedHereticCD = false,
     _cdLoopActive = true,
 }
 
@@ -602,8 +602,8 @@ end
 local CD_KIT_LISTS = {
     vampireCD = { "NeckSnap","WristSnap","BloodHeal","Feed","SpineBreak","EyeGouge","ThroatRip","BlinkAttack","MistMaw","MistCharge","SkyfallReaver","VampireStep" },
     wolfCD = { "ClawedBoxing","GutKick","MenacingGlare","NeckSnap" },
-    witchCD = { "Ictus","Aquamalia","Immobilus","Invisique","Ossox","PoenaDoloris" },
-    regentCD = { "Obsidio","AntecesPoenam","AncestralPainInfliction","Vitalis" },
+    witchCD = { "Ictus","Aquamalia","Immobilus","Invisique","Ossox","PoenaDoloris","MenedekQualSurrentaa","DelfanEotenCor" },
+    regentCD = { "Obsidio","AntecesPoenam","AncestralPainInfliction","Vitalis","FianEnCheEnKanu" },
     unstableCD = { "Dissulta","QuarantineSpell","Stellabunde","TelekineticScream" },
     serumCD = { "OverheadCrush","SerumBite","StakeThrow","KnuckleDown" },
     soulbindCD = { "TelekineticWristSnap","SanguisSicco","SanguisDucatur","OmnisDormit","HarvestOverflow","NemoUnusAnimabusCarnem" },
@@ -635,8 +635,8 @@ local CD_KIT_LISTS = {
         "ChainOfDespair","AbyssalPull","Monarch'sDomain","MonarchsDomain","FireManipulation","Fireball",
         "AgonyOfTheDamned","FireVortex","FireExtinguish","HellTeleportation","SoulExchange"
     },
-    rosuseauWitchCD = { "MolecularImmobilization", "FireOverload", "CombustionSpells", "Level1", "Level2", "Level3" }, -- [CHANGED]
-    weakenedHereticCD = { "HereticCombo", "WolfCurse", "TeleportingStrike", "SoulExtraction" }, -- [ADDED]
+    rosuseauWitchCD = { "MolecularImmobilization", "FireOverload", "CombustionSpells", "Level1", "Level2", "Level3" },
+    weakenedHereticCD = { "HereteiCombo", "WolfCurse", "TeleportingStrike", "SoulExtraction" },
 }
 
 local function fireCDList(list)
@@ -1264,8 +1264,6 @@ task.spawn(function()
 end)
 
 local ROW_HEIGHT = 11 
-local BAR_HEIGHT = 2
-local BAR_GAP = 1
 
 local function makeLabel(parent, size)
     local l = Instance.new("TextLabel")
@@ -1400,7 +1398,6 @@ local function renderESP()
                     end
                 end
                 
-                -- 1. Build Species Line (No username, just Soul Linked)
                 local speciesLine = st.speciesText
                 if flags.soulLinkESP and st.soulLinkText and st.soulLinkText ~= "" then
                     if speciesLine and speciesLine ~= "" then
@@ -1410,13 +1407,11 @@ local function renderESP()
                     end
                 end
                 
-                -- 2. Build Stats Line (Distance | HP | Invisible)
                 local statsParts = {}
                 if flags.distance then
                     table.insert(statsParts, string.format("[%dm]", floor(dist)))
                 end
                 
-                -- Dynamic HP Color
                 if flags.healthBar and hum.MaxHealth > 0 then
                     local pct = clamp(hum.Health / hum.MaxHealth, 0, 1)
                     local r, g, b
@@ -1452,7 +1447,6 @@ local function renderESP()
                 e.inventory.Visible = false
                 
                 local y = 0
-                -- Line 1: Species (Soul Linked)
                 if speciesLine and speciesLine ~= "" then
                     e.species.RichText = true
                     e.species.Text = speciesLine
@@ -1462,7 +1456,6 @@ local function renderESP()
                     y = y + ROW_HEIGHT
                 end
                 
-                -- Line 2: Name | Bloodline
                 if nameRichText then
                     e.name.RichText = true
                     e.name.Text = nameRichText
@@ -1472,7 +1465,6 @@ local function renderESP()
                     y = y + ROW_HEIGHT
                 end
                 
-                -- Line 3: Spell
                 if spellText then
                     e.spell.Text = spellText
                     e.spell.TextColor3 = flags.spellColor
@@ -1481,7 +1473,6 @@ local function renderESP()
                     y = y + ROW_HEIGHT
                 end
                 
-                -- Line 4: [Dist] | HP | Invis
                 if statsText then
                     e.stats.RichText = true
                     e.stats.Text = statsText
@@ -1491,7 +1482,6 @@ local function renderESP()
                     y = y + ROW_HEIGHT
                 end
                 
-                -- Line 5: Inventory
                 if invText then
                     e.inventory.Text = invText
                     e.inventory.TextColor3 = flags.inventoryColor
@@ -1590,7 +1580,7 @@ end
 -- ============================================================
 local window = Rayfield:CreateWindow({
     name = "NFC Script",
-    subtitle = "v1.4.5",
+    subtitle = "v1.5.1",
     sidebarLayout = true,
     theme = "cobalt",
     configuration = { autoSave = true, autoLoad = true, fileName = "NFC_Script" },
@@ -1656,20 +1646,12 @@ combatTab:CreateToggle({ name = "Enable Rage Mode", flag = "RageMode", value = f
         startRageMode(on) 
     end })
 
-local rageDropdown = combatTab:CreateDropdown({
+combatTab:CreateDropdown({
     name = "Target Player",
     options = getPlayerList(),
     value = flags.rageTarget,
     flag = "RageTarget",
     callback = function(sel) flags.rageTarget = sel end
-})
-
-combatTab:CreateButton({
-    name = "Refresh Player List",
-    callback = function()
-        rageDropdown:Refresh(getPlayerList())
-        window:Notify({ title = "Rage Mode", content = "Player list refreshed." })
-    end
 })
 
 combatTab:CreateDivider()
@@ -1762,7 +1744,7 @@ local assistTab = window:CreateTab({ name = "Assistance" })
 
 assistTab:CreateSection({ name = "Teleports" })
 local tpSelectedPlayerName = nil
-local tpPlayerDropdown = assistTab:CreateDropdown({
+assistTab:CreateDropdown({
     name = "Player",
     options = getAllPlayerList(),
     value = nil,
@@ -1790,10 +1772,6 @@ assistTab:CreateButton({ name = "Teleport to Player", callback = function()
     myHRP.CFrame = hrp.CFrame + Vector3.new(0, 0, 3)
     window:Notify({ title = "Teleported", content = "Teleported to " .. target.Name, duration = 4 })
 end })
-assistTab:CreateButton({ name = "Refresh Player List", callback = function()
-    tpPlayerDropdown:Refresh(getAllPlayerList())
-    window:Notify({ title = "Teleport", content = "Player list refreshed.", duration = 4 })
-end })
 
 assistTab:CreateDivider()
 assistTab:CreateSection({ name = "Location Teleports" })
@@ -1811,7 +1789,7 @@ end })
 assistTab:CreateDivider()
 assistTab:CreateSection({ name = "Remote View" })
 local rvSelectedPlayerName = nil
-local rvPlayerDropdown = assistTab:CreateDropdown({
+assistTab:CreateDropdown({
     name = "Player",
     options = getAllPlayerList(),
     value = nil,
@@ -1836,10 +1814,6 @@ end })
 assistTab:CreateButton({ name = "Stop Remote View", callback = function()
     stopRemoteView()
     window:Notify({ title = "Remote View", content = "Stopped.", duration = 4 })
-end })
-assistTab:CreateButton({ name = "Refresh Player List", callback = function()
-    rvPlayerDropdown:Refresh(getAllPlayerList())
-    window:Notify({ title = "Remote View", content = "Player list refreshed.", duration = 4 })
 end })
 
 assistTab:CreateDivider()
@@ -1914,8 +1888,8 @@ infoTab:CreateDivider()
 infoTab:CreateSection({ name = "Base Kits" })
 infoTab:CreateText({ name = "Vampire", text = "Full no cooldowns — every ability resets." })
 infoTab:CreateText({ name = "Wolf", text = "Only some work (Clawed Boxing, Gut Kick, Menacing Glare).\nMost of these you need to fully do for the CD to return." })
-infoTab:CreateText({ name = "Witch", text = "Same as wolf, only some abilities work.\nAbilities: Ictus, Aquamalia, Immobilus, Invisique, Ossox, Poena Doloris." })
-infoTab:CreateText({ name = "Regent", text = "Obsidio, AntecesPoenam, AncestralPainInfliction, Vitalis.\nMost of these you need to fully do for the CD to return." })
+infoTab:CreateText({ name = "Witch", text = "Same as wolf, only some abilities work.\nAbilities: Ictus, Aquamalia, Immobilus, Invisique, Ossox, Poena Doloris, MenedekQualSurrentaa, DelfanEotenCor." })
+infoTab:CreateText({ name = "Regent", text = "Obsidio, AntecesPoenam, AncestralPainInfliction, Vitalis, FianEnCheEnKanu.\nMost of these you need to fully do for the CD to return." })
 
 infoTab:CreateDivider()
 infoTab:CreateSection({ name = "Coins Characters" })
@@ -1940,7 +1914,7 @@ infoTab:CreateText({ name = "Hope", text = "TelekineticDecapitation, Vitris, Tri
 infoTab:CreateText({ name = "Phoenix", text = "PhoenixEntrance, DivineResurgence, InfernalEvasion, BlazingDive, WingedAssault, EmberTouch, CinderExtinguish, BurningTouch, PillarOfFlame.\nMost of these you need to fully do for the CD to return." })
 infoTab:CreateText({ name = "King of Hell", text = "FutureSight, EssenceVortex, PsychicBlast, TelekineticAttack, PhaseShift, SoulClaiming, Hellfire, ChainOfDespair, AbyssalPull, Monarch'sDomain, FireManipulation, Fireball, AgonyOfTheDamned, FireVortex, FireExtinguish, HellTeleportation, SoulExchange.\nMost of these you need to fully do for the CD to return." })
 infoTab:CreateText({ name = "Rosuseau Witch", text = "MolecularImmobilization, FireOverload, CombustionSpells, Level1, Level2, Level3.\nMost of these you need to fully do for the CD to return." })
-infoTab:CreateText({ name = "Weakened Charmed Heretic", text = "HereticCombo, WolfCurse, TeleportingStrike, SoulExtraction.\nMost of these you need to fully do for the CD to return." })
+infoTab:CreateText({ name = "Weakened Charmed Heretic", text = "HereteiCombo, WolfCurse, TeleportingStrike, SoulExtraction.\nMost of these you need to fully do for the CD to return." })
 
 -- ── SETTINGS TAB ────────────────────────────────────────────
 local settingsTab = window:CreateTab({ name = "Settings" })
