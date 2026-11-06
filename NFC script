@@ -644,8 +644,8 @@ end
 local CD_KIT_LISTS = {
     vampireCD = { "NeckSnap","WristSnap","BloodHeal","Feed","SpineBreak","EyeGouge","ThroatRip","BlinkAttack","MistMaw","MistCharge","SkyfallReaver","VampireStep" },
     wolfCD = { "ClawedBoxing","GutKick","MenacingGlare","NeckSnap" },
-    witchCD = { "Ictus","Aquamalia","Immobilus","Invisique","Ossox","PoenaDoloris","MenedekQualSurrentaa","DelfanEotenCor" },
-    regentCD = { "Obsidio","AntecesPoenam","AncestralPainInfliction","Vitalis","FianEnCheEnKanu" },
+    witchCD = { "Ictus","Aquamalia","Immobilus","Invisique","Ossox","PoenaDoloris","MenedekQualSuurentaa","DelfanEotenCor" },
+    regentCD = { "Obsidio","AntecesPoenam","AncestralPainInfliction","Vitalis","Fianencheenkanu" },
     unstableCD = { "Dissulta","QuarantineSpell","Stellabunde","TelekineticScream" },
     serumCD = { "OverheadCrush","SerumBite","StakeThrow","KnuckleDown" },
     soulbindCD = { "TelekineticWristSnap","SanguisSicco","SanguisDucatur","OmnisDormit","HarvestOverflow","NemoUnusAnimabusCarnem" },
