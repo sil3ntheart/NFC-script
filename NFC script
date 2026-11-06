@@ -1,5 +1,5 @@
 -- ============================================================
--- NFC Script v1.6.4
+-- NFC Script v1.6.5 (Refresh Buttons Restored)
 -- Combat / ESP / Assistance / Settings / Information
 -- ============================================================
 
@@ -644,8 +644,8 @@ end
 local CD_KIT_LISTS = {
     vampireCD = { "NeckSnap","WristSnap","BloodHeal","Feed","SpineBreak","EyeGouge","ThroatRip","BlinkAttack","MistMaw","MistCharge","SkyfallReaver","VampireStep" },
     wolfCD = { "ClawedBoxing","GutKick","MenacingGlare","NeckSnap" },
-    witchCD = { "Ictus","Aquamalia","Immobilus","Invisique","Ossox","PoenaDoloris","MenedekQualSuurentaa","DelfanEotenCor" },
-    regentCD = { "Obsidio","AntecesPoenam","AncestralPainInfliction","Vitalis","Fianencheenkanu" },
+    witchCD = { "Ictus","Aquamalia","Immobilus","Invisique","Ossox","PoenaDoloris","MenedekQualSurrentaa","DelfanEotenCor" },
+    regentCD = { "Obsidio","AntecesPoenam","AncestralPainInfliction","Vitalis","FianEnCheEnKanu" },
     unstableCD = { "Dissulta","QuarantineSpell","Stellabunde","TelekineticScream" },
     serumCD = { "OverheadCrush","SerumBite","StakeThrow","KnuckleDown" },
     soulbindCD = { "TelekineticWristSnap","SanguisSicco","SanguisDucatur","OmnisDormit","HarvestOverflow","NemoUnusAnimabusCarnem" },
@@ -1640,7 +1640,7 @@ end
 -- ============================================================
 local window = Rayfield:CreateWindow({
     name = "NFC Script",
-    subtitle = "v1.6.4",
+    subtitle = "v1.6.5",
     sidebarLayout = true,
     theme = "cobalt",
     configuration = { autoSave = true, autoLoad = true, fileName = "NFC_Script" },
@@ -1706,12 +1706,20 @@ combatTab:CreateToggle({ name = "Enable Rage Mode", flag = "RageMode", value = f
         startRageMode(on) 
     end })
 
-combatTab:CreateDropdown({
+local rageDropdown = combatTab:CreateDropdown({
     name = "Target Player",
     options = getPlayerList(),
     value = flags.rageTarget,
     flag = "RageTarget",
     callback = function(sel) flags.rageTarget = sel end
+})
+
+combatTab:CreateButton({
+    name = "Refresh Player List",
+    callback = function()
+        rageDropdown:Refresh(getPlayerList())
+        window:Notify({ title = "Rage Mode", content = "Player list refreshed." })
+    end
 })
 
 combatTab:CreateDivider()
@@ -1801,7 +1809,7 @@ local assistTab = window:CreateTab({ name = "Assistance" })
 
 assistTab:CreateSection({ name = "Teleports" })
 local tpSelectedPlayerName = nil
-assistTab:CreateDropdown({
+local tpPlayerDropdown = assistTab:CreateDropdown({
     name = "Player",
     options = getAllPlayerList(),
     value = nil,
@@ -1829,6 +1837,10 @@ assistTab:CreateButton({ name = "Teleport to Player", callback = function()
     myHRP.CFrame = hrp.CFrame + Vector3.new(0, 0, 3)
     window:Notify({ title = "Teleported", content = "Teleported to " .. target.Name, duration = 4 })
 end })
+assistTab:CreateButton({ name = "Refresh Player List", callback = function()
+    tpPlayerDropdown:Refresh(getAllPlayerList())
+    window:Notify({ title = "Teleport", content = "Player list refreshed.", duration = 4 })
+end })
 
 assistTab:CreateDivider()
 assistTab:CreateSection({ name = "Location Teleports" })
@@ -1846,7 +1858,7 @@ end })
 assistTab:CreateDivider()
 assistTab:CreateSection({ name = "Remote View" })
 local rvSelectedPlayerName = nil
-assistTab:CreateDropdown({
+local rvPlayerDropdown = assistTab:CreateDropdown({
     name = "Player",
     options = getAllPlayerList(),
     value = nil,
@@ -1871,6 +1883,10 @@ end })
 assistTab:CreateButton({ name = "Stop Remote View", callback = function()
     stopRemoteView()
     window:Notify({ title = "Remote View", content = "Stopped.", duration = 4 })
+end })
+assistTab:CreateButton({ name = "Refresh Player List", callback = function()
+    rvPlayerDropdown:Refresh(getAllPlayerList())
+    window:Notify({ title = "Remote View", content = "Player list refreshed.", duration = 4 })
 end })
 
 assistTab:CreateDivider()
