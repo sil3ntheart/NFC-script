@@ -1,5 +1,5 @@
 -- ============================================================
--- NFC Script v1.5.1 (Final Clean Build)
+-- NFC Script v1.6.4
 -- Combat / ESP / Assistance / Settings / Information
 -- ============================================================
 
@@ -220,7 +220,7 @@ local function teleportTo(name)
 end
 
 -- ============================================================
--- Shared state
+-- Shared state & Colors
 -- ============================================================
 local flags = {
     espEnabled = false, name = true, bloodline = true, species = true,
@@ -240,6 +240,7 @@ local flags = {
     rageTarget = "",
     spellColor = Color3.fromRGB(255, 140, 0),
     classColor = Color3.fromRGB(200, 160, 255),
+    soulLinkedClassColor = Color3.fromRGB(0, 150, 255),
     totemColor = Color3.fromRGB(0, 140, 255),
     totemESP = false,
     targetVisEnabled = false, targetVisColor = Color3.fromRGB(255, 60, 60),
@@ -264,6 +265,47 @@ local CLASS_COLORS = {
 local CLASS_PRIORITY = {
     "Tribrid","OriginalHybrid","Hybrid","OriginalVampire","OriginalWerewitch","Werewitch",
     "Vampire","Werewolf","Heretic","Siphoner","Witch","Phoenix","Psychic","HellSpirit","Human",
+}
+
+local BLOODLINE_COLORS = {
+    ["mikaelson"] = Color3.fromRGB(255, 0, 0), -- Red
+    -- Teal / Blue
+    ["hagen"] = Color3.fromRGB(0, 150, 180),
+    ["labonair"] = Color3.fromRGB(0, 150, 180),
+    ["de martel"] = Color3.fromRGB(0, 150, 180),
+    ["cruz"] = Color3.fromRGB(0, 150, 180),
+    ["kirby"] = Color3.fromRGB(0, 150, 180),
+    ["saltzman"] = Color3.fromRGB(0, 150, 180),
+    -- Green
+    ["heartbreaker"] = Color3.fromRGB(60, 160, 80),
+    ["tunde"] = Color3.fromRGB(60, 160, 80),
+    ["hildegard"] = Color3.fromRGB(60, 160, 80),
+    ["castle"] = Color3.fromRGB(60, 160, 80),
+    -- Purple / Pink (Pastel)
+    ["bennett"] = Color3.fromRGB(180, 120, 220),
+    ["marshall"] = Color3.fromRGB(180, 120, 220),
+    ["claire"] = Color3.fromRGB(180, 120, 220),
+    ["tulle"] = Color3.fromRGB(180, 120, 220),
+    ["gilbert"] = Color3.fromRGB(180, 120, 220),
+    ["griffith"] = Color3.fromRGB(180, 120, 220),
+    ["gerard"] = Color3.fromRGB(180, 120, 220),
+    ["deveraux"] = Color3.fromRGB(180, 120, 220),
+    ["parker"] = Color3.fromRGB(180, 120, 220),
+    ["forbes"] = Color3.fromRGB(180, 120, 220),
+    ["salvatore"] = Color3.fromRGB(180, 120, 220),
+    ["shane"] = Color3.fromRGB(180, 120, 220),
+    ["kenner"] = Color3.fromRGB(180, 120, 220),
+    -- Grey
+    ["o'connell"] = Color3.fromRGB(150, 150, 150),
+    ["flemming"] = Color3.fromRGB(150, 150, 150),
+    ["fell"] = Color3.fromRGB(150, 150, 150),
+    ["harris"] = Color3.fromRGB(150, 150, 150),
+    ["marechi"] = Color3.fromRGB(150, 150, 150),
+    ["branson"] = Color3.fromRGB(150, 150, 150),
+    ["chang"] = Color3.fromRGB(150, 150, 150),
+    ["larue"] = Color3.fromRGB(150, 150, 150),
+    ["dubois"] = Color3.fromRGB(150, 150, 150),
+    ["donovan"] = Color3.fromRGB(150, 150, 150),
 }
 
 local connections = {}
@@ -615,7 +657,7 @@ local CD_KIT_LISTS = {
     darkCD = { "InvidiumCalamactus","DarkBlast","DarkBeam","Autem","Ascendo","AdvancedJapanesePurgingSpell","SiphonHug","MagicRevolve","DarkMagicLocator" },
     astralCD = { "CrowTransformation","BrainMelt","CardiacArrest","PhaseCollapse","SygilSpell","VampirismWeakening","AncestralEradication","ToxinsRemedy" },
     awakenedSoulbindCD = { "SonicScream","Soulbinding","TelekineticCombo","HarvestChaos","LightningStrikeSpell","MassTelekineticSnap","MemoryWipingSpell","NemoUnusAnimabusCarnem" },
-    originalMagicCD = { "AdvancedPainInfliction","CrowStorm","LinkShatter","ProtectiveSaltCircle","RestrainingChains","VictasConfracta","VampirismReversal","BloodlineChannel" },
+    originalMagicCD = { "AdvancedPainInfliction","CrowStorm","LinkShatter","ProtectiveSaltCircle","RestrainingChains","VictasConfracta","VampirismReversal","BloodlineChannel", "EnhancedOriginalCreation" },
     connectiveCD = { "SoulLink","ToolDestruction","AdvancedAneurysm","Wraithstep","Victas","SanguinemConfractus","FatedPursuit","EnchantedBind","ConnectiveField" },
     relentlessHunterCD = {
         "HuntersMark","Hunter'sMark","BladeOfSeverance","HuntersReversal","Hunter'sReversal","HuntersDomain","Hunter'sDomain",
@@ -1232,7 +1274,7 @@ local function getInventoryItems(player)
     end
 
     if #foundItems > 0 then
-        return table.concat(foundItems, ", ")
+        return foundItems
     end
     return nil
 end
@@ -1254,7 +1296,7 @@ task.spawn(function()
                 st.spellText = getActiveSpellName(casting)
                 st.isInvis = isInvisible(casting)
                 st.soulLinkText = getSoulLinkTarget(player)
-                st.inventoryText = getInventoryItems(player)
+                st.inventoryTable = getInventoryItems(player)
                 
                 local _, c = getClassColor(char)
                 st.speciesColor = c or flags.classColor
@@ -1361,7 +1403,7 @@ local function renderESP()
         if not st or st.char ~= char then
             st = st or {}
             st.char = char
-            st.speciesText, st.bloodlineText, st.spellText, st.soulLinkText, st.inventoryText = nil, nil, nil, nil, nil
+            st.speciesText, st.bloodlineText, st.spellText, st.soulLinkText, st.inventoryTable = nil, nil, nil, nil, nil
             st.isInvis, st.speciesColor = false, flags.classColor
             espState[player] = st
         end
@@ -1379,34 +1421,42 @@ local function renderESP()
                 end
                 e.gui.Enabled = true
                 
-                local isFriendPlayer = isFriend(player)
-                local nameRichText = nil
-                local nameColor = Color3.new(1, 1, 1)
+                local isLinked = flags.soulLinkESP and st.soulLinkText and st.soulLinkText ~= ""
                 
+                -- 1. Species Line
+                local speciesText = st.speciesText
+                local speciesColor = st.speciesColor or flags.classColor
+                
+                if isLinked then
+                    speciesColor = flags.soulLinkedClassColor
+                end
+                
+                local displayName = player.DisplayName
+                local speciesLine = nil
+                if speciesText and speciesText ~= "" then
+                    if displayName and displayName ~= player.Name then
+                        speciesLine = string.format('%s <font color="#AAAAAA">| %s</font>', speciesText, displayName)
+                    else
+                        speciesLine = speciesText
+                    end
+                end
+                
+                -- 2. Name | Bloodline Line
+                local nameParts = {}
                 if flags.name then
-                    local displayName = player.DisplayName
-                    local baseName = displayName and displayName ~= player.Name and string.format('<font size="12">%s</font> <font size="10" color="#AAAAAA">(%s)</font>', player.Name, displayName) or string.format('<font size="12">%s</font>', player.Name)
-                    
-                    if flags.bloodline and st.bloodlineText and st.bloodlineText ~= "" then
-                        nameRichText = baseName .. " <font color='#AAAAAA'>| " .. st.bloodlineText .. "</font>"
-                    else
-                        nameRichText = baseName
-                    end
-                    
-                    if isFriendPlayer then 
-                        nameColor = flags.friendColor 
-                    end
+                    table.insert(nameParts, string.format('<font size="11">%s</font>', player.Name))
                 end
                 
-                local speciesLine = st.speciesText
-                if flags.soulLinkESP and st.soulLinkText and st.soulLinkText ~= "" then
-                    if speciesLine and speciesLine ~= "" then
-                        speciesLine = speciesLine .. " <font color='#64C8FF'>(Soul Linked)</font>"
-                    else
-                        speciesLine = "<font color='#64C8FF'>(Soul Linked)</font>"
-                    end
+                if flags.bloodline and st.bloodlineText and st.bloodlineText ~= "" then
+                    local bColor = BLOODLINE_COLORS[string.lower(st.bloodlineText)] or Color3.fromRGB(200, 200, 200)
+                    local hex = string.format("#%02X%02X%02X", bColor.R * 255, bColor.G * 255, bColor.B * 255)
+                    table.insert(nameParts, string.format('<font color="#AAAAAA">|</font> <font color="%s">%s</font>', hex, st.bloodlineText))
                 end
                 
+                local nameRichText = #nameParts > 0 and table.concat(nameParts, " ") or nil
+                local nameColor = isFriend(player) and flags.friendColor or Color3.new(1, 1, 1)
+                
+                -- 3. Stats Line (Distance | HP | Invisible)
                 local statsParts = {}
                 if flags.distance then
                     table.insert(statsParts, string.format("[%dm]", floor(dist)))
@@ -1427,7 +1477,7 @@ local function renderESP()
                         b = 0
                     end
                     
-                    local hpText = string.format('<font color="rgb(%d,%d,%d)">%d/%dhp</font>', r, g, b, floor(hum.Health), floor(hum.MaxHealth))
+                    local hpText = string.format('<font color="rgb(%d,%d,%d)">%dhp</font>', r, g, b, floor(hum.Health))
                     table.insert(statsParts, hpText)
                 end
                 
@@ -1435,10 +1485,15 @@ local function renderESP()
                     table.insert(statsParts, '<font color="rgb(255,0,0)">Invisible</font>')
                 end
                 
-                local statsText = #statsParts > 0 and table.concat(statsParts, " | ") or nil
+                local statsText = #statsParts > 0 and table.concat(statsParts, ' <font color="#AAAAAA">|</font> ') or nil
                 
+                -- 4. Spell & Inventory
                 local spellText = (flags.spellESP and st.spellText) or nil
-                local invText = (flags.inventoryESP and st.inventoryText) or nil
+                
+                local invText = nil
+                if flags.inventoryESP and st.inventoryTable then
+                    invText = #st.inventoryTable > 0 and table.concat(st.inventoryTable, ", ") or nil
+                end
                 
                 e.species.Visible = false
                 e.name.Visible = false
@@ -1447,15 +1502,17 @@ local function renderESP()
                 e.inventory.Visible = false
                 
                 local y = 0
-                if speciesLine and speciesLine ~= "" then
+                -- Line 1: Species | DisplayName
+                if speciesLine then
                     e.species.RichText = true
                     e.species.Text = speciesLine
-                    e.species.TextColor3 = st.speciesColor or flags.classColor
+                    e.species.TextColor3 = speciesColor
                     e.species.Position = UDim2.new(0, 0, 0, y)
                     e.species.Visible = true
                     y = y + ROW_HEIGHT
                 end
                 
+                -- Line 2: Name | Bloodline
                 if nameRichText then
                     e.name.RichText = true
                     e.name.Text = nameRichText
@@ -1465,6 +1522,7 @@ local function renderESP()
                     y = y + ROW_HEIGHT
                 end
                 
+                -- Line 3: Spell
                 if spellText then
                     e.spell.Text = spellText
                     e.spell.TextColor3 = flags.spellColor
@@ -1473,6 +1531,7 @@ local function renderESP()
                     y = y + ROW_HEIGHT
                 end
                 
+                -- Line 4: [Dist] | HP | Invis
                 if statsText then
                     e.stats.RichText = true
                     e.stats.Text = statsText
@@ -1482,9 +1541,10 @@ local function renderESP()
                     y = y + ROW_HEIGHT
                 end
                 
+                -- Line 5: Inventory
                 if invText then
+                    e.inventory.RichText = true
                     e.inventory.Text = invText
-                    e.inventory.TextColor3 = flags.inventoryColor
                     e.inventory.Position = UDim2.new(0, 0, 0, y)
                     e.inventory.Visible = true
                     y = y + ROW_HEIGHT
@@ -1580,7 +1640,7 @@ end
 -- ============================================================
 local window = Rayfield:CreateWindow({
     name = "NFC Script",
-    subtitle = "v1.5.1",
+    subtitle = "v1.6.4",
     sidebarLayout = true,
     theme = "cobalt",
     configuration = { autoSave = true, autoLoad = true, fileName = "NFC_Script" },
@@ -1733,11 +1793,8 @@ espTab:CreateColorPicker({ name = "Class Color", color = flags.classColor, flag 
     flags.classColor = c
     for k in pairs(CLASS_COLORS) do CLASS_COLORS[k] = c end
 end })
+espTab:CreateColorPicker({ name = "Soul Linked Class Color", color = flags.soulLinkedClassColor, flag = "SoulLinkedClassColor", callback = function(c) flags.soulLinkedClassColor = c end })
 espTab:CreateColorPicker({ name = "Totem Color", color = flags.totemColor, flag = "EspTotemColor", callback = function(c) flags.totemColor = c end })
-espTab:CreateColorPicker({ name = "Soul Link Color", color = flags.soulLinkColor, flag = "SoulLinkColor",
-    callback = function(c) flags.soulLinkColor = c end })
-espTab:CreateColorPicker({ name = "Inventory Color", color = flags.inventoryColor, flag = "InventoryColor",
-    callback = function(c) flags.inventoryColor = c end })
 
 -- ── ASSISTANCE TAB ──────────────────────────────────────────
 local assistTab = window:CreateTab({ name = "Assistance" })
@@ -1907,7 +1964,7 @@ infoTab:CreateText({ name = "Ancient", text = "VineManipulation, SequunturSomnia
 infoTab:CreateText({ name = "Dark", text = "InvidiumCalamactus, DarkBlast, DarkBeam, Autem, Ascendo, AdvancedJapanesePurgingSpell, SiphonHug, MagicRevolve, DarkMagicLocator.\nMost of these you need to fully do for the CD to return." })
 infoTab:CreateText({ name = "Astral", text = "CrowTransformation, BrainMelt, CardiacArrest, PhaseCollapse, SygilSpell, VampirismWeakening, AncestralEradication, ToxinsRemedy.\nMost of these you need to fully do for the CD to return." })
 infoTab:CreateText({ name = "Awakened Soulbind", text = "Kit has full no cooldowns." })
-infoTab:CreateText({ name = "Original Magic", text = "AdvancedPainInfliction, CrowStorm, LinkShatter, ProtectiveSaltCircle, RestrainingChains, VictasConfracta, VampirismReversal, BloodlineChannel.\nMost of these you need to fully do for the CD to return." })
+infoTab:CreateText({ name = "Original Magic", text = "AdvancedPainInfliction, CrowStorm, LinkShatter, ProtectiveSaltCircle, RestrainingChains, VictasConfracta, VampirismReversal, BloodlineChannel, EnhancedOriginalCreation.\nMost of these you need to fully do for the CD to return." })
 infoTab:CreateText({ name = "Connective", text = "SoulLink, ToolDestruction, AdvancedAneurysm, Wraithstep, Victas, SanguinemConfractus, FatedPursuit, EnchantedBind, ConnectiveField.\nMost of these you need to fully do for the CD to return." })
 infoTab:CreateText({ name = "Relentless Hunter", text = "HuntersMark, BladeOfSeverance, HuntersReversal, HuntersDomain, ArrowsDance, ScorchedGround, RelentlessRecovery, BloodhuntFrenzy, PackBreaker, FinalPursuite, MarkedReprisal, ThroatSlice.\nMost of these you need to fully do for the CD to return." })
 infoTab:CreateText({ name = "Hope", text = "TelekineticDecapitation, Vitris, TribridScream, Mittem, EnergyProjectile, TelekineticScratch, Repulse, Ventus, Lecutio, IgnisScutum, CorporisImpetu, AncestralConflux, DeathInducementSpell.\nMost of these you need to fully do for the CD to return." })
