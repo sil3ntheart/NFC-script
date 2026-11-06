@@ -1,5 +1,5 @@
 -- ============================================================
--- NFC Script v1.3.3 (Final Clean Build)
+-- NFC Script v1.4.5 (Bloodline & New Kits)
 -- Combat / ESP / Assistance / Settings / Information
 -- ============================================================
 
@@ -250,7 +250,7 @@ local flags = {
     expressionCD = false, ancientCD = false, darkCD = false, astralCD = false,
     awakenedSoulbindCD = false, originalMagicCD = false, connectiveCD = false,
     relentlessHunterCD = false, hopeCD = false, phoenixCD = false, kingOfHellCD = false,
-    speckCD = false,
+    rosuseauWitchCD = false, weakenedHereticCD = false, -- [CHANGED]
     _cdLoopActive = true,
 }
 
@@ -635,7 +635,8 @@ local CD_KIT_LISTS = {
         "ChainOfDespair","AbyssalPull","Monarch'sDomain","MonarchsDomain","FireManipulation","Fireball",
         "AgonyOfTheDamned","FireVortex","FireExtinguish","HellTeleportation","SoulExchange"
     },
-    speckCD = { "MolecularImmobilization", "FireOverload", "CombustionSpells", "Level1", "Level2", "Level3" },
+    rosuseauWitchCD = { "MolecularImmobilization", "FireOverload", "CombustionSpells", "Level1", "Level2", "Level3" }, -- [CHANGED]
+    weakenedHereticCD = { "HereticCombo", "WolfCurse", "TeleportingStrike", "SoulExtraction" }, -- [ADDED]
 }
 
 local function fireCDList(list)
@@ -1287,7 +1288,7 @@ local function createESP(player)
     local b = Instance.new("BillboardGui")
     b.Name = "RayfieldESP_" .. player.Name
     b.Size = UDim2.new(0, 200, 0, 120)
-    b.StudsOffsetWorldSpace = Vector3.new(0, 3, 0)
+    b.StudsOffsetWorldSpace = Vector3.new(0, 2.5, 0)
     b.AlwaysOnTop = true
     b.LightInfluence = 0
     b.ResetOnSpawn = false
@@ -1298,33 +1299,15 @@ local function createESP(player)
     
     local speciesLbl = makeLabel(frame, 10)
     local nameLbl    = makeLabel(frame, 11)
-    local soulLinkLbl= makeLabel(frame, 10)
-    local bloodLbl   = makeLabel(frame, 10)
     local spellLbl   = makeLabel(frame, 10)
+    local statsLbl   = makeLabel(frame, 10)
     local invLbl     = makeLabel(frame, 9) 
     invLbl.Font      = Enum.Font.GothamBold
-    local invisLbl   = makeLabel(frame, 10)
-    local distLbl    = makeLabel(frame, 9)
     
-    local hpBarBg = Instance.new("Frame")
-    hpBarBg.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    hpBarBg.BackgroundTransparency = 0.4
-    hpBarBg.BorderSizePixel = 0
-    hpBarBg.Size = UDim2.new(0.3, 0, 0, BAR_HEIGHT)
-    hpBarBg.Visible = false
-    hpBarBg.Parent = frame
-    local hpFill = Instance.new("Frame")
-    hpFill.BackgroundColor3 = Color3.fromRGB(80, 255, 80)
-    hpFill.BorderSizePixel = 0
-    hpFill.Size = UDim2.new(1, 0, 1, 0)
-    hpFill.Parent = hpBarBg
     espEntries[player] = {
         gui = b, frame = frame,
         species = speciesLbl, name = nameLbl, 
-        soulLink = soulLinkLbl, bloodline = bloodLbl, 
-        spell = spellLbl, inventory = invLbl, 
-        invis = invisLbl, distance = distLbl,
-        hpBarBg = hpBarBg, hpBarFill = hpFill,
+        spell = spellLbl, stats = statsLbl, inventory = invLbl,
     }
     return espEntries[player]
 end
@@ -1398,48 +1381,88 @@ local function renderESP()
                 end
                 e.gui.Enabled = true
                 
-                local speciesText = (flags.species and st.speciesText and st.speciesText ~= "") and st.speciesText or nil
                 local isFriendPlayer = isFriend(player)
                 local nameRichText = nil
                 local nameColor = Color3.new(1, 1, 1)
+                
                 if flags.name then
                     local displayName = player.DisplayName
-                    if displayName and displayName ~= player.Name then
-                        nameRichText = string.format('<font size="11">%s</font> <font size="9">(%s)</font>', player.Name, displayName)
+                    local baseName = displayName and displayName ~= player.Name and string.format('<font size="12">%s</font> <font size="10" color="#AAAAAA">(%s)</font>', player.Name, displayName) or string.format('<font size="12">%s</font>', player.Name)
+                    
+                    if flags.bloodline and st.bloodlineText and st.bloodlineText ~= "" then
+                        nameRichText = baseName .. " <font color='#AAAAAA'>| " .. st.bloodlineText .. "</font>"
                     else
-                        nameRichText = string.format('<font size="11">%s</font>', player.Name)
+                        nameRichText = baseName
                     end
+                    
                     if isFriendPlayer then 
                         nameColor = flags.friendColor 
                     end
                 end
                 
-                local bloodText = (flags.bloodline and st.bloodlineText and st.bloodlineText ~= "") and st.bloodlineText or nil
-                local soulLinkText = (flags.soulLinkESP and st.soulLinkText and st.soulLinkText ~= "") and ("Soul Link: " .. st.soulLinkText) or nil
-                local spellName = (flags.spellESP and st.spellText) or nil
-                local inventoryText = (flags.inventoryESP and st.inventoryText) or nil
-                local isInvis = (flags.visESP and st.isInvis) or false
-                local showHP = flags.healthBar and hum.MaxHealth > 0
-                local distText = flags.distance and (floor(dist) .. " studs") or nil
+                -- 1. Build Species Line (No username, just Soul Linked)
+                local speciesLine = st.speciesText
+                if flags.soulLinkESP and st.soulLinkText and st.soulLinkText ~= "" then
+                    if speciesLine and speciesLine ~= "" then
+                        speciesLine = speciesLine .. " <font color='#64C8FF'>(Soul Linked)</font>"
+                    else
+                        speciesLine = "<font color='#64C8FF'>(Soul Linked)</font>"
+                    end
+                end
+                
+                -- 2. Build Stats Line (Distance | HP | Invisible)
+                local statsParts = {}
+                if flags.distance then
+                    table.insert(statsParts, string.format("[%dm]", floor(dist)))
+                end
+                
+                -- Dynamic HP Color
+                if flags.healthBar and hum.MaxHealth > 0 then
+                    local pct = clamp(hum.Health / hum.MaxHealth, 0, 1)
+                    local r, g, b
+                    if pct > 0.5 then
+                        local t = (pct - 0.5) * 2
+                        r = 255 * (1 - t)
+                        g = 255
+                        b = 0
+                    else
+                        local t = pct * 2
+                        r = 255
+                        g = 255 * t
+                        b = 0
+                    end
+                    
+                    local hpText = string.format('<font color="rgb(%d,%d,%d)">%d/%dhp</font>', r, g, b, floor(hum.Health), floor(hum.MaxHealth))
+                    table.insert(statsParts, hpText)
+                end
+                
+                if flags.visESP and st.isInvis then
+                    table.insert(statsParts, '<font color="rgb(255,0,0)">Invisible</font>')
+                end
+                
+                local statsText = #statsParts > 0 and table.concat(statsParts, " | ") or nil
+                
+                local spellText = (flags.spellESP and st.spellText) or nil
+                local invText = (flags.inventoryESP and st.inventoryText) or nil
                 
                 e.species.Visible = false
                 e.name.Visible = false
-                e.bloodline.Visible = false
                 e.spell.Visible = false
-                e.invis.Visible = false
-                e.distance.Visible = false
-                e.soulLink.Visible = false
+                e.stats.Visible = false
                 e.inventory.Visible = false
-                e.hpBarBg.Visible = false
                 
                 local y = 0
-                if speciesText then
-                    e.species.Text = speciesText
+                -- Line 1: Species (Soul Linked)
+                if speciesLine and speciesLine ~= "" then
+                    e.species.RichText = true
+                    e.species.Text = speciesLine
                     e.species.TextColor3 = st.speciesColor or flags.classColor
                     e.species.Position = UDim2.new(0, 0, 0, y)
                     e.species.Visible = true
                     y = y + ROW_HEIGHT
                 end
+                
+                -- Line 2: Name | Bloodline
                 if nameRichText then
                     e.name.RichText = true
                     e.name.Text = nameRichText
@@ -1448,54 +1471,35 @@ local function renderESP()
                     e.name.Visible = true
                     y = y + ROW_HEIGHT
                 end
-                if soulLinkText then
-                    e.soulLink.Text = soulLinkText
-                    e.soulLink.TextColor3 = flags.soulLinkColor
-                    e.soulLink.Position = UDim2.new(0, 0, 0, y)
-                    e.soulLink.Visible = true
-                    y = y + ROW_HEIGHT
-                end
-                if bloodText then
-                    e.bloodline.Text = bloodText
-                    e.bloodline.Position = UDim2.new(0, 0, 0, y)
-                    e.bloodline.Visible = true
-                    y = y + ROW_HEIGHT
-                end
-                if spellName then
-                    e.spell.Text = spellName
+                
+                -- Line 3: Spell
+                if spellText then
+                    e.spell.Text = spellText
                     e.spell.TextColor3 = flags.spellColor
                     e.spell.Position = UDim2.new(0, 0, 0, y)
                     e.spell.Visible = true
                     y = y + ROW_HEIGHT
                 end
-                if inventoryText then
-                    e.inventory.Text = inventoryText
+                
+                -- Line 4: [Dist] | HP | Invis
+                if statsText then
+                    e.stats.RichText = true
+                    e.stats.Text = statsText
+                    e.stats.TextColor3 = Color3.fromRGB(200, 200, 200)
+                    e.stats.Position = UDim2.new(0, 0, 0, y)
+                    e.stats.Visible = true
+                    y = y + ROW_HEIGHT
+                end
+                
+                -- Line 5: Inventory
+                if invText then
+                    e.inventory.Text = invText
                     e.inventory.TextColor3 = flags.inventoryColor
                     e.inventory.Position = UDim2.new(0, 0, 0, y)
                     e.inventory.Visible = true
                     y = y + ROW_HEIGHT
                 end
-                if isInvis then
-                    e.invis.Text = "Invisible"
-                    e.invis.TextColor3 = Color3.fromRGB(255, 80, 80)
-                    e.invis.Position = UDim2.new(0, 0, 0, y)
-                    e.invis.Visible = true
-                    y = y + ROW_HEIGHT
-                end
-                if showHP then
-                    local pct = clamp(hum.Health / hum.MaxHealth, 0, 1)
-                    e.hpBarFill.Size = UDim2.new(pct, 0, 1, 0)
-                    e.hpBarFill.BackgroundColor3 = Color3.fromRGB(255 * (1 - pct), 255 * pct, 80)
-                    e.hpBarBg.Position = UDim2.new(0.35, 0, 0, y)
-                    e.hpBarBg.Visible = true
-                    y = y + BAR_HEIGHT + BAR_GAP
-                end
-                if distText then
-                    e.distance.Text = distText
-                    e.distance.Position = UDim2.new(0, 0, 0, y)
-                    e.distance.Visible = true
-                    y = y + ROW_HEIGHT
-                end
+                
                 e.gui.Size = UDim2.new(0, 200, 0, math.max(y, 1))
             end
         end
@@ -1586,7 +1590,7 @@ end
 -- ============================================================
 local window = Rayfield:CreateWindow({
     name = "NFC Script",
-    subtitle = "v1.3.3",
+    subtitle = "v1.4.5",
     sidebarLayout = true,
     theme = "cobalt",
     configuration = { autoSave = true, autoLoad = true, fileName = "NFC_Script" },
@@ -1720,8 +1724,9 @@ combatTab:CreateToggle({ name = "Phoenix", flag = "PhoenixCD", value = flags.pho
 combatTab:CreateToggle({ name = "King of Hell", flag = "KingOfHellCD", value = flags.kingOfHellCD, callback = function(v) flags.kingOfHellCD = v end })
 
 combatTab:CreateDivider()
-combatTab:CreateSection({ name = "CD Removal — Speck" })
-combatTab:CreateToggle({ name = "Speck", flag = "SpeckCD", value = flags.speckCD, callback = function(v) flags.speckCD = v end })
+combatTab:CreateSection({ name = "CD Removal — Rosuseau Witch" })
+combatTab:CreateToggle({ name = "Rosuseau Witch", flag = "RosuseauWitchCD", value = flags.rosuseauWitchCD, callback = function(v) flags.rosuseauWitchCD = v end })
+combatTab:CreateToggle({ name = "Weakened Charmed Heretic", flag = "WeakenedHereticCD", value = flags.weakenedHereticCD, callback = function(v) flags.weakenedHereticCD = v end })
 
 -- ── ESP TAB ─────────────────────────────────────────────────
 local espTab = window:CreateTab({ name = "ESP" })
@@ -1934,7 +1939,8 @@ infoTab:CreateText({ name = "Relentless Hunter", text = "HuntersMark, BladeOfSev
 infoTab:CreateText({ name = "Hope", text = "TelekineticDecapitation, Vitris, TribridScream, Mittem, EnergyProjectile, TelekineticScratch, Repulse, Ventus, Lecutio, IgnisScutum, CorporisImpetu, AncestralConflux, DeathInducementSpell.\nMost of these you need to fully do for the CD to return." })
 infoTab:CreateText({ name = "Phoenix", text = "PhoenixEntrance, DivineResurgence, InfernalEvasion, BlazingDive, WingedAssault, EmberTouch, CinderExtinguish, BurningTouch, PillarOfFlame.\nMost of these you need to fully do for the CD to return." })
 infoTab:CreateText({ name = "King of Hell", text = "FutureSight, EssenceVortex, PsychicBlast, TelekineticAttack, PhaseShift, SoulClaiming, Hellfire, ChainOfDespair, AbyssalPull, Monarch'sDomain, FireManipulation, Fireball, AgonyOfTheDamned, FireVortex, FireExtinguish, HellTeleportation, SoulExchange.\nMost of these you need to fully do for the CD to return." })
-infoTab:CreateText({ name = "Speck", text = "MolecularImmobilization, FireOverload, CombustionSpells, Level1, Level2, Level3.\nMost of these you need to fully do for the CD to return." })
+infoTab:CreateText({ name = "Rosuseau Witch", text = "MolecularImmobilization, FireOverload, CombustionSpells, Level1, Level2, Level3.\nMost of these you need to fully do for the CD to return." })
+infoTab:CreateText({ name = "Weakened Charmed Heretic", text = "HereticCombo, WolfCurse, TeleportingStrike, SoulExtraction.\nMost of these you need to fully do for the CD to return." })
 
 -- ── SETTINGS TAB ────────────────────────────────────────────
 local settingsTab = window:CreateTab({ name = "Settings" })
