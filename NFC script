@@ -643,10 +643,10 @@ end
 
 local CD_KIT_LISTS = {
     vampireCD = { "NeckSnap","WristSnap","BloodHeal","Feed","SpineBreak","EyeGouge","ThroatRip","BlinkAttack","MistMaw","MistCharge","SkyfallReaver","VampireStep" },
-    wolfCD = { "ClawedBoxing","GutKick","MenacingGlare","NeckSnap" },
+    wolfCD = { "ClawedBoxing","GutKick","MenacingGlare","NeckSnap","BodySlam","DraggingPounce","WolfBite" },
     witchCD = { "Ictus","Aquamalia","Immobilus","Invisique","Ossox","PoenaDoloris","MenedekQualSurrentaa","DelfanEotenCor","TenebraeSuffoco","PhasmatosMotusIncendiamos","ErroxFemus","Incendia","AdSomnum","MenedekQualSuurentaa" },
     regentCD = { "Obsidio","AntecesPoenam","AncestralPainInfliction","Vitalis","FianEnCheEnKanu" },
-    unstableCD = { "Dissulta","QuarantineSpell","Stellabunde","TelekineticScream" },
+    unstableCD = { "Dissulta","QuarantineSpell","Stellabunde","TelekineticScream","SiphonImplosion },
     serumCD = { "OverheadCrush","SerumBite","StakeThrow","KnuckleDown" },
     soulbindCD = { "TelekineticWristSnap","SanguisSicco","SanguisDucatur","OmnisDormit","HarvestOverflow","NemoUnusAnimabusCarnem" },
     geminiCD = { "ISaidHey","Ignalusa","Ignarious","PervenioSupervenioAdvehor","ResistusMaledi" },
