@@ -1,5 +1,5 @@
 -- ============================================================
--- NFC Script v1.6.5 (Refresh Buttons Restored)
+-- NFC Script v1.6.6 (Weakened Charmed Siren Added)
 -- Combat / ESP / Assistance / Settings / Information
 -- ============================================================
 
@@ -251,7 +251,7 @@ local flags = {
     expressionCD = false, ancientCD = false, darkCD = false, astralCD = false,
     awakenedSoulbindCD = false, originalMagicCD = false, connectiveCD = false,
     relentlessHunterCD = false, hopeCD = false, phoenixCD = false, kingOfHellCD = false,
-    rosuseauWitchCD = false, weakenedHereticCD = false,
+    rosuseauWitchCD = false, weakenedHereticCD = false, weakenedSirenCD = false,
     _cdLoopActive = true,
 }
 
@@ -679,6 +679,7 @@ local CD_KIT_LISTS = {
     },
     rosuseauWitchCD = { "MolecularImmobilization", "FireOverload", "CombustionSpells", "Level1", "Level2", "Level3" },
     weakenedHereticCD = { "HereteiCombo", "WolfCurse", "TeleportingStrike", "SoulExtraction" },
+    weakenedSirenCD = { "BloodAbsorb", "BloodSlash", "CharmedMindControl", "HateSpike", "LastCaress", "LustDust", "NightmareStep" },
 }
 
 local function fireCDList(list)
@@ -1640,7 +1641,7 @@ end
 -- ============================================================
 local window = Rayfield:CreateWindow({
     name = "NFC Script",
-    subtitle = "v1.6.5",
+    subtitle = "v1.6.6",
     sidebarLayout = true,
     theme = "cobalt",
     configuration = { autoSave = true, autoLoad = true, fileName = "NFC_Script" },
@@ -1777,6 +1778,7 @@ combatTab:CreateDivider()
 combatTab:CreateSection({ name = "CD Removal — Rosuseau Witch" })
 combatTab:CreateToggle({ name = "Rosuseau Witch", flag = "RosuseauWitchCD", value = flags.rosuseauWitchCD, callback = function(v) flags.rosuseauWitchCD = v end })
 combatTab:CreateToggle({ name = "Weakened Charmed Heretic", flag = "WeakenedHereticCD", value = flags.weakenedHereticCD, callback = function(v) flags.weakenedHereticCD = v end })
+combatTab:CreateToggle({ name = "Weakened Charmed Siren", flag = "WeakenedSirenCD", value = flags.weakenedSirenCD, callback = function(v) flags.weakenedSirenCD = v end })
 
 -- ── ESP TAB ─────────────────────────────────────────────────
 local espTab = window:CreateTab({ name = "ESP" })
@@ -1988,6 +1990,7 @@ infoTab:CreateText({ name = "Phoenix", text = "PhoenixEntrance, DivineResurgence
 infoTab:CreateText({ name = "King of Hell", text = "FutureSight, EssenceVortex, PsychicBlast, TelekineticAttack, PhaseShift, SoulClaiming, Hellfire, ChainOfDespair, AbyssalPull, Monarch'sDomain, FireManipulation, Fireball, AgonyOfTheDamned, FireVortex, FireExtinguish, HellTeleportation, SoulExchange.\nMost of these you need to fully do for the CD to return." })
 infoTab:CreateText({ name = "Rosuseau Witch", text = "MolecularImmobilization, FireOverload, CombustionSpells, Level1, Level2, Level3.\nMost of these you need to fully do for the CD to return." })
 infoTab:CreateText({ name = "Weakened Charmed Heretic", text = "HereteiCombo, WolfCurse, TeleportingStrike, SoulExtraction.\nMost of these you need to fully do for the CD to return." })
+infoTab:CreateText({ name = "Weakened Charmed Siren", text = "BloodAbsorb, BloodSlash, CharmedMindControl, HateSpike, LastCaress, LustDust, NightmareStep.\nMost of these you need to fully do for the CD to return." })
 
 -- ── SETTINGS TAB ────────────────────────────────────────────
 local settingsTab = window:CreateTab({ name = "Settings" })
