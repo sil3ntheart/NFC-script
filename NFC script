@@ -653,11 +653,11 @@ local CD_KIT_LISTS = {
     starGuardianCD = { "StarPulse","PrismaticAegis","ConstellationStep","RadientResonance","StarfallJudgment","StarlightBarrage" },
     starNemesisCD = { "CorruptedPulse","ShatteredReflection","RiftStep","BlackHoleCollapse","DarkMatterRain" },
     expressionCD = { "Vados","Restraint","PhasmatosAerisCirculo","DoloremInferunt","Sanitatum" },
-    ancientCD = { "VineManipulation","SequunturSomnia","MemoryOverload","AhShaLana" },
+    ancientCD = { "VineManipulation","SequunturSomnia","MemoryOverload","AhShaLana","IncendiaProximis","BreatvisShemil","PhasmatosPoenaDecidat","AVitaExAlii","IgnisVestigia","CureCreation","AnchorCreation","ImpetumVitae","OtherSideEntrapment","AnchorDispel","VeilStep","AnchorsLament","FinalPassage","NexusSeal" },
     darkCD = { "InvidiumCalamactus","DarkBlast","DarkBeam","Autem","Ascendo","AdvancedJapanesePurgingSpell","SiphonHug","MagicRevolve","DarkMagicLocator" },
     astralCD = { "CrowTransformation","BrainMelt","CardiacArrest","PhaseCollapse","SygilSpell","VampirismWeakening","AncestralEradication","ToxinsRemedy","AstralProjection","PendantTravel" },
     awakenedSoulbindCD = { "SonicScream","Soulbinding","TelekineticCombo","HarvestChaos","LightningStrikeSpell","MassTelekineticSnap","MemoryWipingSpell","NemoUnusAnimabusCarnem","AncestralAwakening" },
-    originalMagicCD = { "AdvancedPainInfliction","CrowStorm","LinkShatter","ProtectiveSaltCircle","RestrainingChains","VictasConfracta","VampirismReversal","BloodlineChannel", "EnhancedOriginalCreation", "IndestructibleWhiteOakStakeCreation","BloodExtraction","SanguineConvergence","PriomordialRestriction" },
+    originalMagicCD = { "AdvancedPainInfliction","CrowStorm","LinkShatter","ProtectiveSaltCircle","RestrainingChains","VictasConfracta","VampirismReversal","BloodlineChannel", "EnhancedOriginalCreation", "IndestructibleWhiteOakStakeCreation","BloodExtraction","SanguineConvergence","PriomordialRestriction","ProtectiveTalisman,"CarerRescue","MoonlightRing" },
     connectiveCD = { "SoulLink","ToolDestruction","AdvancedAneurysm","Wraithstep","Victas","SanguinemConfractus","FatedPursuit","EnchantedBind","ConnectiveField" },
     relentlessHunterCD = {
         "HuntersMark","Hunter'sMark","BladeOfSeverance","HuntersReversal","Hunter'sReversal","HuntersDomain","Hunter'sDomain",
