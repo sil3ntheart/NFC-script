@@ -657,7 +657,7 @@ local CD_KIT_LISTS = {
     darkCD = { "InvidiumCalamactus","DarkBlast","DarkBeam","Autem","Ascendo","AdvancedJapanesePurgingSpell","SiphonHug","MagicRevolve","DarkMagicLocator" },
     astralCD = { "CrowTransformation","BrainMelt","CardiacArrest","PhaseCollapse","SygilSpell","VampirismWeakening","AncestralEradication","ToxinsRemedy","AstralProjection","PendantTravel" },
     awakenedSoulbindCD = { "SonicScream","Soulbinding","TelekineticCombo","HarvestChaos","LightningStrikeSpell","MassTelekineticSnap","MemoryWipingSpell","NemoUnusAnimabusCarnem","AncestralAwakening" },
-    originalMagicCD = { "AdvancedPainInfliction","CrowStorm","LinkShatter","ProtectiveSaltCircle","RestrainingChains","VictasConfracta","VampirismReversal","BloodlineChannel", "EnhancedOriginalCreation", "IndestructibleWhiteOakStakeCreation","BloodExtraction","SanguineConvergence","PriomordialRestriction","ProtectiveTalisman,"CarerRescue","MoonlightRing" },
+    originalMagicCD = { "AdvancedPainInfliction","CrowStorm","LinkShatter","ProtectiveSaltCircle","RestrainingChains","VictasConfracta","VampirismReversal","BloodlineChannel", "EnhancedOriginalCreation", "IndestructibleWhiteOakStakeCreation","BloodExtraction","SanguineConvergence","PriomordialRestriction","ProtectiveTalisman","CarerRescue","MoonlightRing" },
     connectiveCD = { "SoulLink","ToolDestruction","AdvancedAneurysm","Wraithstep","Victas","SanguinemConfractus","FatedPursuit","EnchantedBind","ConnectiveField" },
     relentlessHunterCD = {
         "HuntersMark","Hunter'sMark","BladeOfSeverance","HuntersReversal","Hunter'sReversal","HuntersDomain","Hunter'sDomain",
