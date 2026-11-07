@@ -1,6 +1,6 @@
 -- ============================================================
--- NFC Script v1.6.6 (Weakened Charmed Siren Added)
--- Combat / ESP / Assistance / Settings / Information
+-- NFC Script v1.6.7 (Universal CD Removal)
+-- Combat / ESP / Assistance / Settings
 -- ============================================================
 
 -- ── Services FIRST ─────────────────────────────────────────
@@ -245,14 +245,7 @@ local flags = {
     totemESP = false,
     targetVisEnabled = false, targetVisColor = Color3.fromRGB(255, 60, 60),
     staffNotify = false,
-    vampireCD = false, wolfCD = false, witchCD = false, regentCD = false,
-    unstableCD = false, serumCD = false, soulbindCD = false, geminiCD = false,
-    starGuardianCD = false, starNemesisCD = false,
-    expressionCD = false, ancientCD = false, darkCD = false, astralCD = false,
-    awakenedSoulbindCD = false, originalMagicCD = false, connectiveCD = false,
-    relentlessHunterCD = false, hopeCD = false, phoenixCD = false, kingOfHellCD = false,
-    rosuseauWitchCD = false, weakenedHereticCD = false, weakenedSirenCD = false,
-    _cdLoopActive = true,
+    universalCD = false,
 }
 
 local CLASS_COLORS = {
@@ -462,6 +455,77 @@ local function startRageMode(enabled)
 end
 
 -- ============================================================
+-- Universal CD Removal
+-- ============================================================
+local universalCDConnections = {}
+
+local function clearUniversalCD()
+    for _, c in ipairs(universalCDConnections) do 
+        pcall(function() c:Disconnect() end) 
+    end
+    table.clear(universalCDConnections)
+end
+
+local function startUniversalCD(enabled)
+    clearUniversalCD()
+    if not enabled then return end
+
+    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+    if not playerGui then return end
+
+    -- 1) AbilitiesSeeker.Frame -> set all BoolValue descendants to false
+    task.spawn(function()
+        local ok, seekerFrame = pcall(function()
+            return playerGui:WaitForChild("AbilitiesSeeker", 30):WaitForChild("Frame", 30)
+        end)
+        if not ok or not seekerFrame or not flags.universalCD then return end
+        table.insert(universalCDConnections, RunService.Heartbeat:Connect(function()
+            if not flags.universalCD then return end
+            if not seekerFrame.Parent then return end
+            for _, descendant in ipairs(seekerFrame:GetDescendants()) do
+                if descendant:IsA("BoolValue") and descendant.Value == true then
+                    descendant.Value = false
+                end
+            end
+        end))
+    end)
+
+    -- 2) Effects -> any BoolValue named "Cooldown" set to false
+    task.spawn(function()
+        local ok, effects = pcall(function()
+            return playerGui:WaitForChild("Effects", 30)
+        end)
+        if not ok or not effects or not flags.universalCD then return end
+        table.insert(universalCDConnections, RunService.Heartbeat:Connect(function()
+            if not flags.universalCD then return end
+            if not effects.Parent then return end
+            for _, obj in ipairs(effects:GetDescendants()) do
+                if obj:IsA("BoolValue") and obj.Name == "Cooldown" and obj.Value == true then
+                    obj.Value = false
+                end
+            end
+        end))
+    end)
+
+    -- 3) Effects.Combos -> any BoolValue named "Cooldown" set to false
+    task.spawn(function()
+        local ok, combos = pcall(function()
+            return playerGui:WaitForChild("Effects", 30):WaitForChild("Combos", 30)
+        end)
+        if not ok or not combos or not flags.universalCD then return end
+        table.insert(universalCDConnections, RunService.Heartbeat:Connect(function()
+            if not flags.universalCD then return end
+            if not combos.Parent then return end
+            for _, obj in ipairs(combos:GetDescendants()) do
+                if obj:IsA("BoolValue") and obj.Name == "Cooldown" and obj.Value == true then
+                    obj.Value = false
+                end
+            end
+        end))
+    end)
+end
+
+-- ============================================================
 -- Auto Herb
 -- ============================================================
 local herbConnection = nil
@@ -629,87 +693,6 @@ local function checkAndAddStaff(player)
         return info 
     end
     return nil
-end
-
--- ============================================================
--- CD Removal
--- ============================================================
-local CooldownOffEvent = nil
-do
-    local SpellEvent = ReplicatedStorage:FindFirstChild("SpellEvent")
-    local ServerEvents = SpellEvent and SpellEvent:FindFirstChild("ServerEvents")
-    CooldownOffEvent = ServerEvents and ServerEvents:FindFirstChild("CooldownOff")
-end
-
-local CD_KIT_LISTS = {
-    vampireCD = { "NeckSnap","WristSnap","BloodHeal","Feed","SpineBreak","EyeGouge","ThroatRip","BlinkAttack","MistMaw","MistCharge","SkyfallReaver","VampireStep" },
-    wolfCD = { "ClawedBoxing","GutKick","MenacingGlare","NeckSnap","BodySlam","DraggingPounce","WolfBite" },
-    witchCD = { "Ictus","Aquamalia","Immobilus","Invisique","Ossox","PoenaDoloris","MenedekQualSurrentaa","DelfanEotenCor","TenebraeSuffoco","PhasmatosMotusIncendiamos","ErroxFemus","Incendia","AdSomnum","MenedekQualSuurentaa" },
-    regentCD = { "Obsidio","AntecesPoenam","AncestralPainInfliction","Vitalis","FianEnCheEnKanu" },
-    unstableCD = { "Dissulta","QuarantineSpell","Stellabunde","TelekineticScream","SiphonImplosion" },
-    serumCD = { "OverheadCrush","SerumBite","StakeThrow","KnuckleDown","Groundbreaker","UnyieldingCharge" },
-    soulbindCD = { "TelekineticWristSnap","SanguisSicco","SanguisDucatur","OmnisDormit","HarvestOverflow","NemoUnusAnimabusCarnem" },
-    geminiCD = { "ISaidHey","Ignalusa","Ignarious","PervenioSupervenioAdvehor","ResistusMaledi" },
-    starGuardianCD = { "StarPulse","PrismaticAegis","ConstellationStep","RadientResonance","StarfallJudgment","StarlightBarrage" },
-    starNemesisCD = { "CorruptedPulse","ShatteredReflection","RiftStep","BlackHoleCollapse","DarkMatterRain" },
-    expressionCD = { "Vados","Restraint","PhasmatosAerisCirculo","DoloremInferunt","Sanitatum" },
-    ancientCD = { "VineManipulation","SequunturSomnia","MemoryOverload","AhShaLana","IncendiaProximis","BreatvisShemil","PhasmatosPoenaDecidat","AVitaExAlii","IgnisVestigia","CureCreation","AnchorCreation","ImpetumVitae","OtherSideEntrapment","AnchorDispel","VeilStep","AnchorsLament","FinalPassage","NexusSeal" },
-    darkCD = { "InvidiumCalamactus","DarkBlast","DarkBeam","Autem","Ascendo","AdvancedJapanesePurgingSpell","SiphonHug","MagicRevolve","DarkMagicLocator" },
-    astralCD = { "CrowTransformation","BrainMelt","CardiacArrest","PhaseCollapse","SygilSpell","VampirismWeakening","AncestralEradication","ToxinsRemedy","AstralProjection","PendantTravel" },
-    awakenedSoulbindCD = { "SonicScream","Soulbinding","TelekineticCombo","HarvestChaos","LightningStrikeSpell","MassTelekineticSnap","MemoryWipingSpell","NemoUnusAnimabusCarnem","AncestralAwakening" },
-    originalMagicCD = { "AdvancedPainInfliction","CrowStorm","LinkShatter","ProtectiveSaltCircle","RestrainingChains","VictasConfracta","VampirismReversal","BloodlineChannel", "EnhancedOriginalCreation", "IndestructibleWhiteOakStakeCreation","BloodExtraction","SanguineConvergence","PriomordialRestriction","ProtectiveTalisman","CarerRescue","MoonlightRing" },
-    connectiveCD = { "SoulLink","ToolDestruction","AdvancedAneurysm","Wraithstep","Victas","SanguinemConfractus","FatedPursuit","EnchantedBind","ConnectiveField" },
-    relentlessHunterCD = {
-        "HuntersMark","Hunter'sMark","BladeOfSeverance","HuntersReversal","Hunter'sReversal","HuntersDomain","Hunter'sDomain",
-        "ArrowsDance","Arrow'sDance","ScorchedGround","RelentlessRecovery","BloodhuntFrenzy","PackBreaker","Packbreaker",
-        "FinalPursuite","MarkedReprisal","ThroatSlice"
-    },
-    hopeCD = {
-        "TelekineticDecapitation","Vitris","TribridScream","Mittem","EnergyProjectile","TelekineticScratch",
-        "Repulse","Ventus","Lecutio","IgnisScutum","CorporisImpetu","AncestralConflux","DeathInducementSpell"
-    },
-    phoenixCD = {
-        "PhoenixEntrance","DivineResurgence","InfernalEvasion","BlazingDive","WingedAssault",
-        "EmberTouch","CinderExtinguish","BurningTouch","PillarOfFlame"
-    },
-    kingOfHellCD = {
-        "FutureSight","EssenceVortex","PsychicBlast","TelekineticAttack","PhaseShift","SoulClaiming","Hellfire",
-        "ChainOfDespair","AbyssalPull","Monarch'sDomain","MonarchsDomain","FireManipulation","Fireball",
-        "AgonyOfTheDamned","FireVortex","FireExtinguish","HellTeleportation","SoulExchange"
-    },
-    rosuseauWitchCD = { "MolecularImmobilization", "FireOverload", "CombustionSpells", "Level1", "Level2", "Level3" },
-    weakenedHereticCD = { "HereteiCombo", "WolfCurse", "TeleportingStrike", "SoulExtraction" },
-    weakenedSirenCD = { "BloodAbsorb", "BloodSlash", "CharmedMindControl", "HateSpike", "LastCaress", "LustDust", "NightmareStep" },
-}
-
-local function fireCDList(list)
-    if not CooldownOffEvent then return end
-    local myEntry = getLivingEntry(LocalPlayer)
-    local casting = myEntry and myEntry:FindFirstChild("CastingSpells")
-    if not casting then return end
-    for _, abilityName in ipairs(list) do
-        local b = casting:FindFirstChild(abilityName)
-        if b and b:IsA("BoolValue") and b.Value then
-            pcall(function()
-                if type(firesignal) == "function" then 
-                    firesignal(CooldownOffEvent.OnClientEvent, abilityName) 
-                end
-            end)
-        end
-    end
-end
-
-if CooldownOffEvent then
-    task.spawn(function()
-        while flags._cdLoopActive do
-            task.wait(0.05)
-            for kitFlag, list in pairs(CD_KIT_LISTS) do
-                if flags[kitFlag] then 
-                    pcall(fireCDList, list) 
-                end
-            end
-        end
-    end)
 end
 
 -- ============================================================
@@ -1641,7 +1624,7 @@ end
 -- ============================================================
 local window = Rayfield:CreateWindow({
     name = "NFC Script",
-    subtitle = "v1.6.6",
+    subtitle = "v1.6.7",
     sidebarLayout = true,
     theme = "cobalt",
     configuration = { autoSave = true, autoLoad = true, fileName = "NFC_Script" },
@@ -1745,40 +1728,12 @@ combatTab:CreateColorPicker({ name = "Target Color", color = flags.targetVisColo
     callback = function(c) flags.targetVisColor = c end })
 
 combatTab:CreateDivider()
-combatTab:CreateSection({ name = "CD Removal — Base Kits" })
-combatTab:CreateToggle({ name = "Vampire", flag = "VampireCD", value = flags.vampireCD, callback = function(v) flags.vampireCD = v end })
-combatTab:CreateToggle({ name = "Werewolf", flag = "WolfCD", value = flags.wolfCD, callback = function(v) flags.wolfCD = v end })
-combatTab:CreateToggle({ name = "Witch", flag = "WitchCD", value = flags.witchCD, callback = function(v) flags.witchCD = v end })
-combatTab:CreateToggle({ name = "Regent", flag = "RegentCD", value = flags.regentCD, callback = function(v) flags.regentCD = v end })
-
-combatTab:CreateDivider()
-combatTab:CreateSection({ name = "CD Removal — Coins Kits" })
-combatTab:CreateToggle({ name = "Unstable", flag = "UnstableCD", value = flags.unstableCD, callback = function(v) flags.unstableCD = v end })
-combatTab:CreateToggle({ name = "Serum", flag = "SerumCD", value = flags.serumCD, callback = function(v) flags.serumCD = v end })
-combatTab:CreateToggle({ name = "Soulbind", flag = "SoulbindCD", value = flags.soulbindCD, callback = function(v) flags.soulbindCD = v end })
-combatTab:CreateToggle({ name = "Gemini", flag = "GeminiCD", value = flags.geminiCD, callback = function(v) flags.geminiCD = v end })
-combatTab:CreateToggle({ name = "Star Guardian", flag = "StarGuardianCD", value = flags.starGuardianCD, callback = function(v) flags.starGuardianCD = v end })
-combatTab:CreateToggle({ name = "Star Nemesis", flag = "StarNemesisCD", value = flags.starNemesisCD, callback = function(v) flags.starNemesisCD = v end })
-
-combatTab:CreateDivider()
-combatTab:CreateSection({ name = "CD Removal — Gamepass Kits" })
-combatTab:CreateToggle({ name = "Expression", flag = "ExpressionCD", value = flags.expressionCD, callback = function(v) flags.expressionCD = v end })
-combatTab:CreateToggle({ name = "Ancient", flag = "AncientCD", value = flags.ancientCD, callback = function(v) flags.ancientCD = v end })
-combatTab:CreateToggle({ name = "Dark", flag = "DarkCD", value = flags.darkCD, callback = function(v) flags.darkCD = v end })
-combatTab:CreateToggle({ name = "Astral", flag = "AstralCD", value = flags.astralCD, callback = function(v) flags.astralCD = v end })
-combatTab:CreateToggle({ name = "Awakened Soulbind", flag = "AwakenedSoulbindCD", value = flags.awakenedSoulbindCD, callback = function(v) flags.awakenedSoulbindCD = v end })
-combatTab:CreateToggle({ name = "Original Magic", flag = "OriginalMagicCD", value = flags.originalMagicCD, callback = function(v) flags.originalMagicCD = v end })
-combatTab:CreateToggle({ name = "Connective", flag = "ConnectiveCD", value = flags.connectiveCD, callback = function(v) flags.connectiveCD = v end })
-combatTab:CreateToggle({ name = "Relentless Hunter", flag = "RelentlessHunterCD", value = flags.relentlessHunterCD, callback = function(v) flags.relentlessHunterCD = v end })
-combatTab:CreateToggle({ name = "Hope", flag = "HopeCD", value = flags.hopeCD, callback = function(v) flags.hopeCD = v end })
-combatTab:CreateToggle({ name = "Phoenix", flag = "PhoenixCD", value = flags.phoenixCD, callback = function(v) flags.phoenixCD = v end })
-combatTab:CreateToggle({ name = "King of Hell", flag = "KingOfHellCD", value = flags.kingOfHellCD, callback = function(v) flags.kingOfHellCD = v end })
-
-combatTab:CreateDivider()
-combatTab:CreateSection({ name = "CD Removal — Rosuseau Witch" })
-combatTab:CreateToggle({ name = "Rosuseau Witch", flag = "RosuseauWitchCD", value = flags.rosuseauWitchCD, callback = function(v) flags.rosuseauWitchCD = v end })
-combatTab:CreateToggle({ name = "Weakened Charmed Heretic", flag = "WeakenedHereticCD", value = flags.weakenedHereticCD, callback = function(v) flags.weakenedHereticCD = v end })
-combatTab:CreateToggle({ name = "Weakened Charmed Siren", flag = "WeakenedSirenCD", value = flags.weakenedSirenCD, callback = function(v) flags.weakenedSirenCD = v end })
+combatTab:CreateSection({ name = "Cooldowns" })
+combatTab:CreateToggle({ name = "Universal CD Removal", flag = "UniversalCD", value = flags.universalCD,
+    callback = function(on)
+        flags.universalCD = on
+        startUniversalCD(on)
+    end })
 
 -- ── ESP TAB ─────────────────────────────────────────────────
 local espTab = window:CreateTab({ name = "ESP" })
@@ -1954,44 +1909,6 @@ assistTab:CreateButton({ name = "Fling", callback = function()
     end)
 end })
 
--- ── INFORMATION TAB ─────────────────────────────────────────
-local infoTab = window:CreateTab({ name = "Information" })
-infoTab:CreateSection({ name = "Information" })
-infoTab:CreateText({ name = "Welcome ^.^", text = "This section provides details on which abilities work with CD Removal for each kit." })
-
-infoTab:CreateDivider()
-infoTab:CreateSection({ name = "Base Kits" })
-infoTab:CreateText({ name = "Vampire", text = "Full no cooldowns — every ability resets." })
-infoTab:CreateText({ name = "Wolf", text = "Only some work (Clawed Boxing, Gut Kick, Menacing Glare).\nMost of these you need to fully do for the CD to return." })
-infoTab:CreateText({ name = "Witch", text = "Same as wolf, only some abilities work.\nAbilities: Ictus, Aquamalia, Immobilus, Invisique, Ossox, Poena Doloris, MenedekQualSurrentaa, DelfanEotenCor." })
-infoTab:CreateText({ name = "Regent", text = "Obsidio, AntecesPoenam, AncestralPainInfliction, Vitalis, FianEnCheEnKanu.\nMost of these you need to fully do for the CD to return." })
-
-infoTab:CreateDivider()
-infoTab:CreateSection({ name = "Coins Characters" })
-infoTab:CreateText({ name = "Unstable", text = "Dissulta, QuarantineSpell, Stellabunde, TelekineticScream.\nMost of these you need to fully do for the CD to return." })
-infoTab:CreateText({ name = "Serum", text = "OverheadCrush, SerumBite, StakeThrow, KnuckleDown.\nMost of these you need to fully do for the CD to return." })
-infoTab:CreateText({ name = "Soulbind", text = "Kit has full no cooldowns." })
-infoTab:CreateText({ name = "Gemini", text = "Kit has full no cooldowns." })
-infoTab:CreateText({ name = "Star Guardian", text = "StarPulse, PrismaticAegis, ConstellationStep, RadientResonance, StarfallJudgment, StarlightBarrage.\nMost of these you need to fully do for the CD to return." })
-infoTab:CreateText({ name = "Star Nemesis", text = "CorruptedPulse, ShatteredReflection, RiftStep, BlackHoleCollapse, DarkMatterRain.\nMost of these you need to fully do for the CD to return." })
-
-infoTab:CreateDivider()
-infoTab:CreateSection({ name = "Gamepasses" })
-infoTab:CreateText({ name = "Expression", text = "Vados, Restraint, PhasmatosAerisCirculo, DoloremInferunt, Sanitatum.\nMost of these you need to fully do for the CD to return." })
-infoTab:CreateText({ name = "Ancient", text = "VineManipulation, SequunturSomnia, MemoryOverload, AhShaLana.\nMost of these you need to fully do for the CD to return." })
-infoTab:CreateText({ name = "Dark", text = "InvidiumCalamactus, DarkBlast, DarkBeam, Autem, Ascendo, AdvancedJapanesePurgingSpell, SiphonHug, MagicRevolve, DarkMagicLocator.\nMost of these you need to fully do for the CD to return." })
-infoTab:CreateText({ name = "Astral", text = "CrowTransformation, BrainMelt, CardiacArrest, PhaseCollapse, SygilSpell, VampirismWeakening, AncestralEradication, ToxinsRemedy.\nMost of these you need to fully do for the CD to return." })
-infoTab:CreateText({ name = "Awakened Soulbind", text = "Kit has full no cooldowns." })
-infoTab:CreateText({ name = "Original Magic", text = "AdvancedPainInfliction, CrowStorm, LinkShatter, ProtectiveSaltCircle, RestrainingChains, VictasConfracta, VampirismReversal, BloodlineChannel, EnhancedOriginalCreation.\nMost of these you need to fully do for the CD to return." })
-infoTab:CreateText({ name = "Connective", text = "SoulLink, ToolDestruction, AdvancedAneurysm, Wraithstep, Victas, SanguinemConfractus, FatedPursuit, EnchantedBind, ConnectiveField.\nMost of these you need to fully do for the CD to return." })
-infoTab:CreateText({ name = "Relentless Hunter", text = "HuntersMark, BladeOfSeverance, HuntersReversal, HuntersDomain, ArrowsDance, ScorchedGround, RelentlessRecovery, BloodhuntFrenzy, PackBreaker, FinalPursuite, MarkedReprisal, ThroatSlice.\nMost of these you need to fully do for the CD to return." })
-infoTab:CreateText({ name = "Hope", text = "TelekineticDecapitation, Vitris, TribridScream, Mittem, EnergyProjectile, TelekineticScratch, Repulse, Ventus, Lecutio, IgnisScutum, CorporisImpetu, AncestralConflux, DeathInducementSpell.\nMost of these you need to fully do for the CD to return." })
-infoTab:CreateText({ name = "Phoenix", text = "PhoenixEntrance, DivineResurgence, InfernalEvasion, BlazingDive, WingedAssault, EmberTouch, CinderExtinguish, BurningTouch, PillarOfFlame.\nMost of these you need to fully do for the CD to return." })
-infoTab:CreateText({ name = "King of Hell", text = "FutureSight, EssenceVortex, PsychicBlast, TelekineticAttack, PhaseShift, SoulClaiming, Hellfire, ChainOfDespair, AbyssalPull, Monarch'sDomain, FireManipulation, Fireball, AgonyOfTheDamned, FireVortex, FireExtinguish, HellTeleportation, SoulExchange.\nMost of these you need to fully do for the CD to return." })
-infoTab:CreateText({ name = "Rosuseau Witch", text = "MolecularImmobilization, FireOverload, CombustionSpells, Level1, Level2, Level3.\nMost of these you need to fully do for the CD to return." })
-infoTab:CreateText({ name = "Weakened Charmed Heretic", text = "HereteiCombo, WolfCurse, TeleportingStrike, SoulExtraction.\nMost of these you need to fully do for the CD to return." })
-infoTab:CreateText({ name = "Weakened Charmed Siren", text = "BloodAbsorb, BloodSlash, CharmedMindControl, HateSpike, LastCaress, LustDust, NightmareStep.\nMost of these you need to fully do for the CD to return." })
-
 -- ── SETTINGS TAB ────────────────────────────────────────────
 local settingsTab = window:CreateTab({ name = "Settings" })
 settingsTab:CreateSection({ name = "Appearance" })
@@ -2054,8 +1971,6 @@ end })
 settingsTab:CreateDivider()
 settingsTab:CreateSection({ name = "Danger Zone" })
 settingsTab:CreateButton({ name = "Eject Script", callback = function()
-    flags._cdLoopActive = false
-    for k in pairs(CD_KIT_LISTS) do flags[k] = false end
     flags.djChallenge = false
     if djConnection then 
         djConnection:Disconnect() 
@@ -2077,6 +1992,8 @@ settingsTab:CreateButton({ name = "Eject Script", callback = function()
     startRageMode(false)
     flags.targetVisEnabled = false
     clearTargetVis()
+    flags.universalCD = false
+    clearUniversalCD()
     flags.espEnabled = false
     for player in pairs(espEntries) do 
         destroyESP(player) 
